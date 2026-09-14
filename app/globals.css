@@ -11,3 +11,16 @@ button:focus-visible,input:focus-visible{outline:3px solid #66b4b9;outline-offse
 @media print{body{background:white!important}body *{visibility:hidden!important}[data-slot=dialog-content],[data-slot=dialog-content] *{visibility:visible!important}[data-slot=dialog-content]{position:absolute!important;inset:0!important;transform:none!important;max-width:none!important;width:100%!important;max-height:none!important;overflow:visible!important;border:0!important;box-shadow:none!important}.recordactions,.hint,[data-slot=dialog-close]{display:none!important}table{width:100%}tr{break-inside:avoid}}
 /* Readable controls at laptop and touch sizes. */
 .clientbar label{font-size:12px}.navtabs button{font-size:14px!important}.filters button{font-size:14px;min-height:44px}.tile strong{font-size:16px}.tile footer,.fasttools button,.savedraft,.finalise,.resultsheading button{font-size:14px}.tile footer{padding-top:15px}.cartline strong{font-size:14px}.totals>div:not(.allocationbar){font-size:14px}.cartsub,.categorytag,.remaining>div,.catalogfoot{font-size:12px!important}.remaining small,.totals>small{font-size:12px}.cartitems{max-height:300px}.fasttools button{min-height:44px}.brand>span{font-size:12px}.catalogfoot{align-items:flex-start}.sampledot{flex-shrink:0;margin-top:4px}.quickpcts button{font-size:12px}.topactions button{font-size:14px}.cartline .iconbtn{min-height:44px}.appdialog .tablemeta{font-size:12px}.pagefoot{font-size:12px}@media(max-width:600px){.navtabs button{font-size:12px!important}.tile strong{font-size:15px}.tile footer{font-size:13px}.filters button{font-size:13px}.tilemain{min-height:210px}.catalogfoot{font-size:11px!important}}
+/* The header scrolls normally; only the scheme navigation and filters stick. */
+@media screen and (min-width:601px){
+  body{overflow-y:auto}
+  main{height:auto;overflow:visible}
+  .console{align-items:start}
+  .selection,.catalog{overflow:visible;min-height:0}
+  .navrow{position:sticky;top:0;z-index:20;background:var(--background);padding:8px 0;margin-top:-8px;margin-bottom:12px}
+  .filters{position:sticky;top:80px;align-self:start;height:calc(100dvh - 100px);min-height:0;max-height:none;overflow-y:auto;overscroll-behavior:contain}
+  .schemes>.grid{overflow:visible;align-content:start}
+  .desktopcart{position:sticky;top:16px;align-self:start;max-height:calc(100dvh - 32px);overflow:auto}
+}
+@media screen and (min-width:601px) and (max-width:1240px){.filters{height:calc(100dvh - 170px)}}
+@media screen and (max-width:600px){.navrow{position:sticky;top:0;z-index:20;background:var(--background);padding:8px 0;margin-bottom:8px}.filters{position:sticky;top:112px;z-index:19;background:var(--background);padding:8px 0}.filters button{flex-shrink:0}}
