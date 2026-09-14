@@ -24,3 +24,14 @@ button:focus-visible,input:focus-visible{outline:3px solid #66b4b9;outline-offse
 }
 @media screen and (min-width:601px) and (max-width:1240px){.filters{height:calc(100dvh - 170px)}}
 @media screen and (max-width:600px){.navrow{position:sticky;top:0;z-index:20;background:var(--background);padding:8px 0;margin-bottom:8px}.filters{position:sticky;top:112px;z-index:19;background:var(--background);padding:8px 0}.filters button{flex-shrink:0}}
+/* Adjustable scheme/cart split, including iPad landscape. */
+.allocation-split{height:auto!important;align-items:stretch!important;overflow:visible!important;width:100%}
+.allocation-split [data-panel],.allocation-pane{overflow:visible!important}
+.allocation-pane{height:100%;min-width:0}
+.allocation-pane>.selection{height:100%}
+.allocation-divider{width:24px!important;flex:0 0 24px!important;align-self:stretch;background:transparent!important;cursor:col-resize!important;touch-action:none;outline-offset:-4px}
+.allocation-divider:before{content:'';position:absolute;left:11px;top:0;bottom:0;width:2px;background:#d6e3e7}
+.allocation-divider:hover:before,.allocation-divider:focus-visible:before{background:#16878b}
+.divider-grip{position:sticky;top:45vh;align-self:flex-start;margin-top:170px;display:flex;align-items:center;justify-content:center;width:20px;height:48px;border:1px solid #b9d1d5;border-radius:7px;background:#fff;color:#387f87;font-size:25px;z-index:1;box-shadow:0 2px 5px #2033490c}
+@media(min-width:1000px){.allocation-split .desktopcart{display:flex;position:sticky;top:16px;max-height:calc(100dvh - 32px);overflow:auto}.mobilesticky{display:none}.workspace{padding-bottom:18px}.allocation-split .grid{grid-template-columns:repeat(2,minmax(0,1fr))}.allocation-split .navtabs{flex-wrap:wrap}.allocation-split .navtabs button{font-size:12px!important}.allocation-split .catalog{grid-template-columns:160px minmax(0,1fr);gap:14px}.allocation-split .filters{height:calc(100dvh - 100px)}}
+@media(min-width:1650px){.allocation-split .grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
