@@ -42,3 +42,5 @@ button:focus-visible,input:focus-visible{outline:3px solid #66b4b9;outline-offse
 .allocation-split .catalog.noside{grid-template-columns:minmax(0,1fr)} 
 .catalog>.schemes{min-width:0}
 
+
+.tabcaption{display:flex;flex-direction:column;align-items:center;gap:3px}.tabshortcut{font-family:inherit;font-size:10px;font-weight:400;line-height:1.1;letter-spacing:.2px;opacity:.65}
