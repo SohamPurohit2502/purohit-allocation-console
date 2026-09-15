@@ -61,3 +61,9 @@ button:focus-visible,input:focus-visible{outline:3px solid #66b4b9;outline-offse
 .cart .cartitems{min-height:180px;max-height:none;overscroll-behavior:contain}
 .cart>.cartheading,.cart>.cartsub,.cart>.fasttools,.cart>.finalise,.cart>.savedraft{flex-shrink:0}
 @media(min-width:1000px){.allocation-split .desktopcart{height:calc(100dvh - 32px)}.allocation-split .desktopcart .cartitems{flex:1 1 auto;min-height:140px}}
+/* Dialogs also use the grid utility; scheme-card columns must not affect them. */
+.appdialog[data-slot=dialog-content]{grid-template-columns:minmax(0,1fr);width:min(760px,calc(100vw - 24px))}
+.appdialog .mastermanager{width:100%;grid-template-columns:minmax(0,1fr)}
+.appdialog .mastertable td:first-child,.appdialog .mastertable th:first-child{width:40px}
+.appdialog .mastertable td:nth-child(2),.appdialog .mastertable th:nth-child(2){width:24%;overflow-wrap:anywhere}
+.appdialog .mastertable td:last-child,.appdialog .mastertable th:last-child{width:80px}
