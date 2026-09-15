@@ -67,3 +67,11 @@ button:focus-visible,input:focus-visible{outline:3px solid #66b4b9;outline-offse
 .appdialog .mastertable td:first-child,.appdialog .mastertable th:first-child{width:40px}
 .appdialog .mastertable td:nth-child(2),.appdialog .mastertable th:nth-child(2){width:24%;overflow-wrap:anywhere}
 .appdialog .mastertable td:last-child,.appdialog .mastertable th:last-child{width:80px}
+.cartsummary{flex-shrink:0;border-top:1px solid #e3e9ec;padding-top:10px;margin:10px 0 12px}
+.summarynumbers{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.summarynumbers>div{min-width:0;display:flex;flex-direction:column;gap:5px}
+.summarynumbers>div+div{border-left:1px solid #e3e9ec;padding-left:8px}
+.summarynumbers span{font-size:10px;color:#81929e;white-space:nowrap}
+.summarynumbers b{font-size:12px;font-weight:600;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.summarynumbers .summarybalance{color:#387c73}.summarynumbers .summarybalance.red{color:#b7533e}
+.cartsummary>small{display:block;font-size:10px;color:#81929e;margin-top:5px;text-align:right}.cartsummary>small.red{color:#b7533e}

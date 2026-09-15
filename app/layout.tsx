@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: 'Allocation Console | Purohit Associates LLP',
   description: 'Internal mutual fund allocation workspace for Purohit Associates LLP, ARN 110015.',
-  icons: { icon: '/favicon.png?v=1' },
+  icons: { icon: '/favicon.svg?v=2' },
 };
 
 export default function RootLayout({
@@ -33,6 +33,7 @@ export default function RootLayout({
     </html>
   );
 }
+
 
 
 
