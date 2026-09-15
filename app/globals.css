@@ -44,3 +44,20 @@ button:focus-visible,input:focus-visible{outline:3px solid #66b4b9;outline-offse
 
 
 .tabcaption{display:flex;flex-direction:column;align-items:center;gap:3px}.tabshortcut{font-family:inherit;font-size:10px;font-weight:400;line-height:1.1;letter-spacing:.2px;opacity:.65}
+/* Keep the editable scheme allocations primary; totals are a compact reference. */
+.cart .totals{margin-top:10px;padding-top:10px;flex-shrink:0}
+.cart .totals>div:not(.allocationbar){font-size:12px;margin-bottom:5px;gap:12px}
+.cart .totals b{font-size:12px;font-weight:500}
+.cart .allocationbar{height:3px;margin-top:8px}
+.cart .allocationbar i{height:3px}
+.cart .totals>small{font-size:10px;margin-top:4px}
+.cart .remaining{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:4px 10px;margin:8px 0 10px;padding:9px 11px;border-radius:6px;flex-shrink:0}
+.cart .remaining>div{font-size:12px!important;gap:6px}
+.cart .remaining strong{font-size:16px;font-weight:600;letter-spacing:0;margin:0;white-space:nowrap}
+.cart .remaining small{grid-column:1/-1;font-size:10px;margin:0;line-height:1.4}
+.cart .lineamount{height:48px;border-color:#accbcd;background:#f7fbfb}
+.cart .lineamount input{font-size:19px;font-weight:650;color:#203349}
+.cart .lineamount label input{font-size:16px}
+.cart .cartitems{min-height:180px;max-height:none;overscroll-behavior:contain}
+.cart>.cartheading,.cart>.cartsub,.cart>.fasttools,.cart>.finalise,.cart>.savedraft{flex-shrink:0}
+@media(min-width:1000px){.allocation-split .desktopcart{height:calc(100dvh - 32px)}.allocation-split .desktopcart .cartitems{flex:1 1 auto;min-height:140px}}
