@@ -37,3 +37,8 @@ button:focus-visible,input:focus-visible{outline:3px solid #66b4b9;outline-offse
 @media(min-width:1650px){.allocation-split .grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 
 .mastermanager{display:grid;gap:16px;min-width:0}.mastertoolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:13px}.mastertoolbar>span{margin-right:auto;color:#6a7b86}.mastertable{overflow:auto;max-height:48vh;border:1px solid #dce4e8;border-radius:10px}.mastertable table{width:100%;border-collapse:collapse;text-align:left}.mastertable th{position:sticky;top:0;background:#edf3f3;z-index:1}.mastertable th,.mastertable td{padding:12px;border-bottom:1px solid #e5ebed;font-size:13px}.mastertable small{display:block;color:#71808d;margin-top:5px}.mastertable input[type=checkbox]{width:17px;height:17px;accent-color:#427d80}.mastereditor{padding:18px;background:#edf4f3;border:1px solid #d0dfdc;border-radius:10px}.mastereditor h3{margin-bottom:12px}.mastereditor p{font-size:14px;margin-bottom:14px}.masterfields{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px}.masterfields label{display:grid;gap:6px;font-size:13px}.masterfields input,.masterfields select{width:100%;min-width:0;border:1px solid #cddbdd;background:white;border-radius:7px;padding:10px}.topactions{flex-wrap:wrap}@media(max-width:600px){.masterfields{grid-template-columns:1fr}.mastertable th,.mastertable td{padding:8px}}
+
+/* Tabs without a filter sidebar must use the entire resizable panel. */
+.allocation-split .catalog.noside{grid-template-columns:minmax(0,1fr)} 
+.catalog>.schemes{min-width:0}
+
