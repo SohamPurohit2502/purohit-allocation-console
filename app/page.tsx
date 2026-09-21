@@ -1012,6 +1012,23 @@ export default function Home() {
                 Existing portfolio
                 {portfolio ? ' (' + portfolio.holdings.length + ')' : ''}
               </button>
+              <button
+                className="secondary"
+                disabled={!client}
+                onClick={() => setPanel('actions')}
+              >
+                <ArrowRightLeft size={14} />
+                Portfolio actions
+                {(data.portfolioActions || []).filter(
+                  (batch) => batch.client.id === client?.id,
+                ).length
+                  ? ' (' +
+                    (data.portfolioActions || []).filter(
+                      (batch) => batch.client.id === client?.id,
+                    ).length +
+                    ')'
+                  : ''}
+              </button>
             </div>
           </div>
           <div className="investment">
