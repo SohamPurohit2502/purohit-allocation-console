@@ -81,3 +81,16 @@ button:focus-visible,input:focus-visible{outline:3px solid #66b4b9;outline-offse
 
 .portfoliotable table{min-width:650px}
 
+/* Portfolio context is shown where scheme decisions are made. */
+.portfoliocontext{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:-3px 0 13px;padding:9px 11px;border:1px solid #d5e4e3;border-radius:7px;background:#eef6f4;color:#52747a;font-size:11px}
+.portfoliocontext span:first-child{margin-right:auto}.portfoliocontext b{color:#236e70}.portfoliocontext button{border:0;background:transparent;color:#087c80;font-size:11px;min-height:30px;text-decoration:underline}
+.portfoliohint{display:grid!important;gap:3px;margin-top:9px;padding:7px 8px;border-radius:5px;background:#f5f8f8;color:#6e818c!important;font-size:10px!important;text-align:left;width:100%}
+.portfoliohint b{color:#247679}.portfoliohint small{font-size:10px;line-height:1.35;color:#71838e}.tilemain:has(.portfoliohint){min-height:230px}
+
+/* Folio is optional and sits beside the allocation value. */
+.lineamount>input:not(.folioinput){flex:1 1 90px}.lineamount .folioinput{flex:0 1 145px;border-left:1px solid #d8e3e5!important;padding-left:10px!important;font-size:12px!important;font-weight:400!important;color:#536c78!important}
+
+.drafttoolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 12px;border:1px solid #dbe5e7;border-radius:8px;background:#f6f9f9;font-size:12px;color:#627887}.drafttoolbar label{display:flex;align-items:center;gap:8px;margin-right:auto}.drafttoolbar input,.draftcheck{width:17px;height:17px;margin:0;accent-color:#087c80}.drafttoolbar .primary{display:flex;align-items:center;gap:7px;min-height:38px;font-size:12px}.recordlist article>.draftcheck{flex:0 0 17px}
+
+@media(max-width:600px){.lineamount{flex-wrap:wrap;height:auto!important;min-height:48px;padding:6px 10px!important}.lineamount .folioinput{flex-basis:100%;border-left:0!important;border-top:1px solid #d8e3e5!important;padding:8px 0 2px!important}.portfoliocontext span:first-child{width:100%}.drafttoolbar .primary{width:100%}}
+

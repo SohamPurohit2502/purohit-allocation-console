@@ -1,78 +1,1877 @@
 'use client';
-import {useEffect,useRef,useState} from 'react';
-import {PortfolioManager} from '@/components/portfolio-manager';
-import {NewClient} from '@/components/new-client';
-import {foliosFor,type Portfolio} from '@/lib/portfolio';
-import {printAllocation} from '@/lib/print-allocation';
-import {MasterManager} from '@/components/master-manager';
-import {AllocationSplit} from '@/components/allocation-split';
+import { useEffect, useRef, useState } from 'react';
+import { PortfolioManager } from '@/components/portfolio-manager';
+import { NewClient } from '@/components/new-client';
+import { type Portfolio } from '@/lib/portfolio';
+import { printAllocation } from '@/lib/print-allocation';
+import { MasterManager } from '@/components/master-manager';
+import { AllocationSplit } from '@/components/allocation-split';
 import uploadedSchemes from '@/lib/uploaded-schemes.json';
-import {browserEdition,localData} from '@/lib/browser-storage';
-import {Search,ShoppingBasket,Layers3,Building2,Star,Clock3,LayoutGrid,History,Database,FolderOpen,RotateCcw,Plus,Check,X,ArrowRight,Save,Equal,Percent,Download,Copy,Printer,UserRound,ChevronRight,PackageOpen,CheckCircle2,AlertCircle} from 'lucide-react';
-import {Tabs,TabsList,TabsTrigger} from '@/components/ui/tabs';
-import {Combobox,ComboboxInput,ComboboxContent,ComboboxList,ComboboxItem,ComboboxEmpty} from '@/components/ui/combobox';
-import {Dialog,DialogContent,DialogTitle,DialogDescription} from '@/components/ui/dialog';
-import {Sheet,SheetContent,SheetTitle} from '@/components/ui/sheet';
-import {AlertDialog,AlertDialogContent,AlertDialogTitle,AlertDialogDescription,AlertDialogCancel} from '@/components/ui/alert-dialog';
-import {Table,TableHeader,TableBody,TableHead,TableRow,TableCell} from '@/components/ui/table';
-import {categories,sampleClients,sampleSchemes,sampleBaskets,money,parseMoney,splitAmount,matches,validateAllocation,type Client,type Scheme,type Line,type Allocation,type Basket} from '@/lib/domain';
-type Data={portfolios?:Portfolio[];clients:Client[];schemes:Scheme[];records:Allocation[];baskets:Basket[];favourites:string[];recent:string[]};
-const initial:Data={clients:sampleClients,schemes:uploadedSchemes,records:[],baskets:sampleBaskets,favourites:[],recent:[]};
-async function api(payload:unknown){if(browserEdition())return localData(payload);const r=await fetch('/api/data',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const j:any=await r.json();if(!r.ok)throw Error(j.error||'Unable to save.');return j}
-function download(name:string,text:string,type='text/csv;charset=utf-8'){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
-const csv=(rows:unknown[][])=>'\uFEFF'+rows.map(r=>r.map(x=>'"'+String(x??'').replace(/^[=+@-]/,"'$&").replace(/"/g,'""')+'"').join(',')).join('\r\n');
-const recordRows=(a:Allocation)=>[['Date','Time','Client Name','Iwell ID','Total Investment','Official Scheme Name','AMC','Category','Folio','Amount','Percentage'],...a.lines.map(l=>[new Date(a.date).toLocaleDateString('en-IN',{timeZone:'Asia/Kolkata'}),new Date(a.date).toLocaleTimeString('en-IN',{timeZone:'Asia/Kolkata'}),a.client.name,a.client.id,a.total/100,l.scheme.official,l.scheme.amc,l.scheme.category,l.folio||(l.folioMode==='new'?'New folio':'Not specified'),l.amount/100,(l.amount/a.total*100).toFixed(2)])];
-export default function Home(){
-const [data,setData]=useState<Data>(initial),[loaded,setLoaded]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false),[client,setClient]=useState<Client|null>(null),[total,setTotal]=useState(200000000),[lines,setLines]=useState<Line[]>([]),[draftId,setDraftId]=useState<string|null>(null),[tab,setTab]=useState('category'),[filter,setFilter]=useState('All'),[query,setQuery]=useState(''),[panel,setPanel]=useState<string|null>(null),[drawer,setDrawer]=useState(false),[pctMode,setPctMode]=useState(false),[historyQuery,setHistoryQuery]=useState(''),[view,setView]=useState<Allocation|null>(null),[confirm,setConfirm]=useState<null|{title:string;description:string;run:()=>void}>(null),[basketName,setBasketName]=useState(''),[importKind,setImportKind]=useState('clients'),[importRows,setImportRows]=useState<any[]>([]),[importError,setImportError]=useState(''),[fileName,setFileName]=useState(''),[date,setDate]=useState('');
-const searchRef=useRef<HTMLInputElement>(null);const stateRef=useRef<any>(null);
-const allocated=lines.reduce((s,l)=>s+l.amount,0),remaining=total-allocated,complete=!!client&&total>0&&remaining===0&&lines.length>0&&lines.every(l=>l.amount>0);
-async function refresh(){try{if(browserEdition()){setData(await localData());setLoaded(true);setError('');return}const r=await fetch('/api/data');const j:any=await r.json();if(!r.ok)throw Error(j.error);setData(j);setLoaded(true);setError('')}catch(e){setError((e as Error).message)}}
-useEffect(()=>{refresh();const tick=()=>setDate(new Date().toLocaleString('en-IN',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',timeZone:'Asia/Kolkata'})+' IST');tick();const t=setInterval(tick,30000);return()=>clearInterval(t)},[]);
-useEffect(()=>{
- let armedUntil=0;
- const reset=()=>{armedUntil=0};
- const onKey=(e:KeyboardEvent)=>{
-  const target=e.target as HTMLElement|null;
-  if(panel||drawer||confirm||e.isComposing||target?.closest('input,textarea,select,[contenteditable="true"],[role="textbox"]')){reset();return}
-  if(e.key==='Alt'&&!e.ctrlKey&&!e.metaKey){e.preventDefault();armedUntil=Date.now()+3000;return}
-  const keys:Record<string,string>={h:'house',c:'category',f:'favourites',r:'recent',a:'all'};
-  const tabId=keys[e.key.toLowerCase()];
-  if(tabId&&(e.altKey||Date.now()<armedUntil)&&!e.ctrlKey&&!e.metaKey&&!e.shiftKey&&!e.getModifierState('AltGraph')){
-   e.preventDefault();reset();setTab(tabId);setFilter('All');
-   document.querySelector<HTMLButtonElement>('[data-scheme-tab="'+tabId+'"]')?.focus({preventScroll:true});
-  }else reset();
- };
- window.addEventListener('keydown',onKey);window.addEventListener('blur',reset);window.addEventListener('pointerdown',reset);
- return()=>{window.removeEventListener('keydown',onKey);window.removeEventListener('blur',reset);window.removeEventListener('pointerdown',reset)};
-},[panel,drawer,confirm]);
-useEffect(()=>{if(!notice)return;const t=setTimeout(()=>setNotice(''),4500);return()=>clearTimeout(t)},[notice]);
-useEffect(()=>{const f=(e:KeyboardEvent)=>{if((e.ctrlKey||e.metaKey)&&e.key==='k'){e.preventDefault();searchRef.current?.focus()}};window.addEventListener('keydown',f);return()=>window.removeEventListener('keydown',f)},[]);
-async function work(fn:()=>Promise<void>){setBusy(true);try{await fn()}catch(e){setNotice((e as Error).message)}finally{setBusy(false)}}
-const portfolio=data.portfolios?.find(p=>p.clientId===client?.id);
-function folioDefaults(s:Scheme,c:Client|null=client):Pick<Line,'folio'|'folioMode'>{const fs=foliosFor(s.amc,data.portfolios?.find(p=>p.clientId===c?.id)?.holdings||[]);return fs.length?{folio:fs.length===1?fs[0]:'',folioMode:'existing'}:{folio:'',folioMode:'new'}}
-function selectClient(c:Client|null){setClient(c);setDraftId(null);setLines(ls=>ls.map(l=>({...l,...folioDefaults(l.scheme,c)})))}
-function addHolding(s:Scheme,folio:string){setLines(ls=>ls.some(l=>l.scheme.id===s.id)?ls.map(l=>l.scheme.id===s.id?{...l,folio,folioMode:'existing'}:l):[...ls,{scheme:s,amount:0,folio,folioMode:'existing'}]);setNotice('Added to the new-investment cart.')}
-function setFolio(id:string,changes:Partial<Line>){setLines(ls=>ls.map(l=>l.scheme.id===id?{...l,...changes}:l))}
-function add(s:Scheme){const selected=lines.some(l=>l.scheme.id===s.id);setLines(ls=>ls.some(l=>l.scheme.id===s.id)?ls.filter(l=>l.scheme.id!==s.id):[...ls,{scheme:s,amount:0,...folioDefaults(s)}]);if(selected)return;const next=[s.id,...data.recent.filter(id=>id!==s.id)].slice(0,40);setData(d=>({...d,recent:next}));api({action:'preference',key:'recent',value:next}).catch(()=>setNotice('Recent selection could not be saved.'));}
-function amount(id:string,n:number){setLines(ls=>ls.map(l=>l.scheme.id===id?{...l,amount:n}:l))}
-function equal(){const values=splitAmount(total,lines.map(()=>1));setLines(ls=>ls.map((l,i)=>({...l,amount:values[i]})));}
-function clear(){setClient(null);setLines([]);setTotal(0);setDraftId(null);setDrawer(false)}
-function askClear(){setConfirm({title:'Clear this allocation?',description:'Unsaved client selection and amounts will be cleared. Saved drafts and history will remain available.',run:clear})}
-async function save(final:boolean){await work(async()=>{const a:Allocation={id:draftId||crypto.randomUUID(),client:client!,total,lines,status:final?'final':'draft',date:new Date().toISOString()};validateAllocation(a,final);const saved=await api({action:'save',record:a});await refresh();if(final){setView(saved);setPanel('record');setLines([]);setDraftId(null);setDrawer(false)}else{setDraftId(saved.id);setNotice('Draft saved. Continue whenever you’re ready.')}})}
-function loadDraft(a:Allocation){const run=()=>{setClient(a.client);setTotal(a.total);setLines(a.lines.map(l=>({...l,...(!l.folioMode?folioDefaults(l.scheme,a.client):{})})));setDraftId(a.id);setPanel(null);setNotice('Draft restored.')};if(lines.length)setConfirm({title:'Replace the current allocation?',description:'Unsaved changes will be replaced by this draft.',run});else run()}
-function applyBasket(b:Basket){const run=()=>{if(total<=0){setNotice('Enter the investment amount before applying a basket.');return}const found=b.items.map(x=>data.schemes.find(s=>s.id===x.id&&s.active));if(found.some(s=>!s)){setNotice('This basket contains an inactive or unavailable scheme.');return}const values=splitAmount(total,b.items.map(x=>x.pct));setLines(found.map((s,i)=>({scheme:s!,amount:values[i],...folioDefaults(s!)})));setPanel(null);setNotice(b.name+' applied.')};if(lines.length)setConfirm({title:'Replace selected schemes?',description:'This basket will replace your current scheme selection and amounts.',run});else run()}
-async function star(id:string){const next=data.favourites.includes(id)?data.favourites.filter(x=>x!==id):[...data.favourites,id];await work(async()=>{await api({action:'preference',key:'favourites',value:next});setData(d=>({...d,favourites:next}))})}
-const active=data.schemes.filter(s=>s.active);const amcs=[...new Set(active.map(s=>s.amc))].sort();const options=tab==='house'?amcs:[...new Set([...categories,...active.map(s=>s.category)])];
-let shown=active.filter(s=>(filter==='All'||(tab==='category'?s.category===filter:tab==='house'?s.amc===filter:true))&&(tab!=='favourites'||data.favourites.includes(s.id))&&(tab!=='recent'||data.recent.includes(s.id))&&matches(s.name+' '+s.official+' '+s.category+' '+s.amc,query));if(tab==='recent')shown.sort((a,b)=>data.recent.indexOf(a.id)-data.recent.indexOf(b.id));
-async function importFile(file:File){setImportRows([]);setImportError('');setFileName(file.name);try{if(file.size>20e6)throw Error('Choose a file smaller than 20 MB.');let rows:any[][]=[];if(file.name.toLowerCase().endsWith('.xlsx')){const {default:read}=await import('read-excel-file/browser');rows=(await read(file))[0].data}else if(file.name.toLowerCase().endsWith('.csv')){const {default:Papa}=await import('papaparse');const parsed=Papa.parse(await file.text(),{skipEmptyLines:'greedy'});if(parsed.errors.length)throw Error('CSV could not be read: '+parsed.errors[0].message);rows=parsed.data as any[][]}else throw Error('Choose an .xlsx or .csv file.');if(rows.length<2)throw Error('The file has no data rows.');const heads=rows[0].map(x=>String(x??'').trim().toLowerCase());const get=(row:any[],key:string)=>String(row[heads.indexOf(key.toLowerCase())]??'').trim();const required=importKind==='clients'?['Iwell ID','Client Name']:['Scheme ID','Official Scheme Name','Display Name','AMC','Category'];for(const h of required)if(!heads.includes(h.toLowerCase()))throw Error('Missing column: '+h);const ids=new Set();const existing=new Set((importKind==='clients'?data.clients:data.schemes).map(x=>x.id));const parsed=rows.slice(1).filter(r=>r.some(x=>x!==null&&String(x).trim())).map((r,i)=>{const id=get(r,importKind==='clients'?'Iwell ID':'Scheme ID');const name=get(r,importKind==='clients'?'Client Name':'Display Name');if(!id||!name)throw Error(`Row ${i+2}: ID and name are required.`);if(ids.has(id)||existing.has(id))throw Error(`Row ${i+2}: duplicate or existing ID ${id}.`);ids.add(id);if(importKind==='clients')return{id,name};const official=get(r,'Official Scheme Name'),amc=get(r,'AMC'),category=get(r,'Category');if(!official||!amc||!category)throw Error(`Row ${i+2}: official name, AMC and category are required.`);const status=get(r,'Active / Inactive').toLowerCase();if(status&&!['active','inactive'].includes(status))throw Error(`Row ${i+2}: use Active or Inactive.`);return{id,name,official,amc,category,plan:get(r,'Plan'),option:get(r,'Option'),active:status!=='inactive'}});if(!parsed.length||parsed.length>20000)throw Error('Import 1–20,000 rows at a time.');setImportRows(parsed)}catch(e){setImportError((e as Error).message)}}
-stateRef.current={data,client,total,lines,add,equal};
-useEffect(()=>{const context=(document as any).modelContext;if(!context?.registerTool)return;const lifecycle=new AbortController();const register=(tool:any)=>Promise.resolve(context.registerTool(tool,{signal:lifecycle.signal})).catch(()=>{});register({name:'read_allocation',description:'Read the current staged allocation and available schemes.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true},execute:()=>{const s=stateRef.current;return{client:s.client,total:s.total/100,lines:s.lines.map((l:Line)=>({id:l.scheme.id,name:l.scheme.name,amount:l.amount/100})),schemes:s.data.schemes.filter((s:Scheme)=>s.active)}}});register({name:'stage_allocation',description:'Select a client and schemes with amounts in rupees for review. Does not finalise or save.',inputSchema:{type:'object',properties:{clientId:{type:'string'},total:{type:'number'},lines:{type:'array',items:{type:'object',properties:{schemeId:{type:'string'},amount:{type:'number'}},required:['schemeId','amount']}}},required:['clientId','total','lines'],additionalProperties:false},annotations:{readOnlyHint:false},execute:async(input:any)=>{const s=stateRef.current,c=s.data.clients.find((c:Client)=>c.id===input.clientId);if(!c||!Number.isFinite(input.total)||input.total<=0||!Array.isArray(input.lines))throw Error('Invalid client or investment.');const ls=input.lines.map((l:any)=>{const scheme=s.data.schemes.find((x:Scheme)=>x.id===l.schemeId&&x.active);if(!scheme||!Number.isFinite(l.amount)||l.amount<0)throw Error('Invalid scheme or amount');return{scheme,amount:Math.round(l.amount*100),...folioDefaults(scheme,c)}});validateAllocation({client:c,total:Math.round(input.total*100),lines:ls} as Allocation);setClient(c);setTotal(Math.round(input.total*100));setLines(ls);setDraftId(null);await new Promise(r=>requestAnimationFrame(()=>r(null)));return{status:'staged',schemes:ls.length}}});return()=>lifecycle.abort()},[]);
-const Cart=()=> <><div className="cartheading"><ShoppingBasket size={20}/><h2>Allocation cart</h2><span className="count">{lines.length}</span></div><p className="cartsub">{lines.length?`${lines.length} schemes selected`:'Build your allocation'}</p><div className="fasttools"><button disabled={!lines.length||!total} onClick={equal}><Equal size={17}/> Equal allocate</button><button className={pctMode?'on':''} onClick={()=>setPctMode(!pctMode)}><Percent size={16}/> By %</button></div><div className="cartitems">{!lines.length?<div className="empty"><div className="emptyicon"><ShoppingBasket size={30}/></div><h3>Your allocation starts here</h3><p>Tap a scheme to add it.<br/>Assign amounts here in a few clicks.</p></div>:lines.map((l,i)=><div className="cartline" key={l.scheme.id}><div className="linename"><span className="index">{String(i+1).padStart(2,'0')}</span><strong>{l.scheme.name}</strong><button className="iconbtn" aria-label={'Remove '+l.scheme.name} onClick={()=>setLines(ls=>ls.filter(x=>x.scheme.id!==l.scheme.id))}><X size={16}/></button></div><div className="foliocontrol"><label>Folio<select aria-label={'Folio choice for '+l.scheme.name} value={l.folioMode||'new'} onChange={e=>{const mode=e.target.value as Line['folioMode'];const fs=foliosFor(l.scheme.amc,portfolio?.holdings||[]);setFolio(l.scheme.id,{folioMode:mode,folio:mode==='existing'&&fs.length===1?fs[0]:''})}}><option value="existing">Existing AMC folio</option><option value="manual">Enter folio manually</option><option value="new">New folio</option></select></label>{l.folioMode==='existing'?<select aria-label={'Existing folio for '+l.scheme.name} value={l.folio||''} onChange={e=>setFolio(l.scheme.id,{folio:e.target.value})}><option value="">Select folio</option>{[...new Set([...foliosFor(l.scheme.amc,portfolio?.holdings||[]),...(l.folio?[l.folio]:[])])].map(f=><option key={f}>{f}</option>)}</select>:l.folioMode==='manual'?<input aria-label={'Manual folio for '+l.scheme.name} placeholder="Enter folio number" maxLength={80} value={l.folio||''} onChange={e=>setFolio(l.scheme.id,{folio:e.target.value})}/>:null}{l.folioMode==='new'&&foliosFor(l.scheme.amc,portfolio?.holdings||[]).length>0&&<small>Existing AMC folios are available. Choose Existing AMC folio to reuse one.</small>}</div><div className="lineamount"><span>₹</span><input aria-label={'Amount for '+l.scheme.name} inputMode="decimal" value={l.amount?String(l.amount/100):''} placeholder="0" onChange={e=>amount(l.scheme.id,parseMoney(e.target.value))}/>{pctMode?<label><input aria-label={'Percentage for '+l.scheme.name} inputMode="decimal" value={total?+(l.amount/total*100).toFixed(2):0} onChange={e=>{const n=Number(e.target.value);if(Number.isFinite(n)&&n>=0&&n<=100)amount(l.scheme.id,Math.round(total*n/100))}}/>%</label>:<span className="pct">{total?(l.amount/total*100).toFixed(1):'0'}%</span>}</div>{pctMode&&<div className="quickpcts">{[10,15,20,25,30,40,50].map(p=><button key={p} onClick={()=>amount(l.scheme.id,Math.round(total*p/100))}>{p}%</button>)}</div>}</div>)}</div><div className="cartsummary"><div className="summarynumbers"><div><span>Total investment</span><b>{money(total)}</b></div><div><span>Total allocated</span><b>{money(allocated)}</b></div><div className={remaining<0?'summarybalance red':'summarybalance'}><span>{remaining<0?'Over allocated':'Remaining'}</span><b>{money(Math.abs(remaining))}</b></div></div><div className="allocationbar"><i style={{width:Math.min(100,total?allocated/total*100:0)+'%'}}/></div><small className={remaining<0?'red':''}>{remaining<0?'Reduce allocations to continue.':complete?'Fully allocated. Ready to finalise.':(total?(allocated/total*100).toFixed(1):0)+'% allocated'}</small></div><button className="primary finalise" disabled={!complete||busy||!loaded} onClick={()=>save(true)}>Finalise allocation <ArrowRight size={18}/></button><button className="savedraft" disabled={!client||!lines.length||!total||busy||!loaded} onClick={()=>save(false)}><Save size={16}/> Save draft</button></>;
-return <main><header className="brand"><img src={browserEdition()?"./logo.png":"/logo.png"} alt="Purohit Associates LLP — AMFI Registered Mutual Fund Distributor 110015 — Investing with integrity"/><span>AMFI Registered Mutual Fund Distributor<br/><b>ARN – 110015</b></span><div className="headerend"><span className="internal"><i/> INTERNAL WORKSPACE</span><small>{date}</small></div></header><div className="workspace"><div className="titleline"><div><p className="eyebrow">INVESTMENT DESK</p><h1>Allocation console</h1></div><div className="topactions"><button onClick={()=>setPanel('drafts')}><FolderOpen size={17}/><span>Drafts</span><em>{data.records.filter(r=>r.status==='draft').length}</em></button><button onClick={()=>setPanel('history')}><History size={17}/><span>History</span></button><button onClick={()=>setPanel('clients')}><UserRound size={17}/><span>Clients</span></button><button onClick={()=>setPanel('schemes')}><Layers3 size={17}/><span>Schemes</span></button><button onClick={()=>setPanel('admin')}><Database size={17}/><span>Admin / Data</span></button></div></div>{error&&<div className="errorbar"><AlertCircle size={18}/>{error}<button onClick={refresh}>Retry connection</button></div>}<section className="clientbar"><div className="clientpicker"><label>01 <span>SELECT CLIENT</span></label><Combobox items={data.clients} value={client} onValueChange={v=>selectClient(v as Client|null)} itemToStringLabel={(c:Client)=>c.name+' · '+c.id}><ComboboxInput placeholder="Search by Iwell ID or client name" aria-label="Search client" className="clientinput" showClear/><ComboboxContent><ComboboxEmpty>No matching client. Use New client to create one.</ComboboxEmpty><ComboboxList>{(c:Client)=><ComboboxItem key={c.id} value={c} className="clientoption"><UserRound size={18}/><span><b>{c.name}</b><small>{c.id}</small></span></ComboboxItem>}</ComboboxList></ComboboxContent></Combobox><div className="clienttools"><button className="secondary" onClick={()=>setPanel('newclient')}><Plus size={14}/>New client</button><button className="secondary" disabled={!client} onClick={()=>setPanel('portfolio')}><FolderOpen size={14}/>Existing portfolio{portfolio?' ('+portfolio.holdings.length+')':''}</button></div></div><div className="investment"><label htmlFor="investment">02 <span>INVESTMENT AMOUNT</span></label><div className="investmentfield"><span>₹</span><input id="investment" inputMode="decimal" value={total?(total/100).toLocaleString('en-IN',{maximumFractionDigits:2}):''} placeholder="Enter amount" onChange={e=>setTotal(parseMoney(e.target.value))}/><span className="inr">INR</span></div></div><button className="reset" onClick={askClear}><RotateCcw size={16}/>Reset</button></section><AllocationSplit><section className="selection"><div className="navrow"><Tabs value={tab} onValueChange={v=>{setTab(String(v));setFilter('All')}}><TabsList className="navtabs">{[['house','By fund house',Building2,'H'],['category','By category',Layers3,'C'],['favourites','Favourites',Star,'F'],['recent','Recent',Clock3,'R'],['all','All schemes',LayoutGrid,'A']].map(([value,label,Icon,key]:any)=><TabsTrigger key={value} value={value} data-scheme-tab={value} aria-keyshortcuts={'Alt+'+key} title={label+'  -  Alt + '+key+' (or Alt, then '+key+')'}><Icon size={16}/><span className="tabcaption"><span>{label}</span><kbd className="tabshortcut">Alt + {key}</kbd></span></TabsTrigger>)}</TabsList></Tabs></div><div className={'catalog '+(!['category','house'].includes(tab)?'noside':'')}>{['category','house'].includes(tab)&&<aside className="filters"><h3>{tab==='house'?'FUND HOUSES':'CATEGORIES'}</h3><button className={filter==='All'?'active':''} onClick={()=>setFilter('All')}>All {tab==='house'?'fund houses':'categories'}<span>{active.length}</span></button>{options.map(o=><button key={o} className={filter===o?'active':''} onClick={()=>setFilter(o)}>{o.replace(' Mutual Fund','')}<span>{active.filter(s=>(tab==='house'?s.amc:s.category)===o).length}</span></button>)}</aside>}<div className="schemes"><div className="searchfield"><Search size={19}/><input ref={searchRef} aria-label="Search schemes" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search schemes…"/>{query?<button className="iconbtn" aria-label="Clear scheme search" onClick={()=>setQuery('')}><X size={17}/></button>:<kbd>⌘ / Ctrl K</kbd>}</div><div className="resultsheading"><h2>{filter!=='All'?filter:tab==='favourites'?'Your favourites':tab==='recent'?'Recently selected':'All schemes'}<span>{shown.length}</span></h2><button onClick={()=>setPanel('baskets')}><Layers3 size={16}/> Baskets</button></div><div className="grid">{shown.map(s=>{const added=lines.some(l=>l.scheme.id===s.id);return <div className={'tile '+(added?'selected':'')} key={s.id}><button className="tilemain" onClick={()=>add(s)} aria-label={(added?'Remove ':'Add ')+s.name} aria-pressed={added}><span className="amcrow"><span className="amcmark">{s.amc.split(' ').map(w=>w[0]).slice(0,2).join('')}</span><span>{s.amc.replace(' Mutual Fund','')}</span></span><strong>{s.name}</strong><span className="categorytag">{s.category}</span><footer>{added?<><Check size={16}/> Added</>:<><Plus size={16}/> Add scheme</>}</footer></button><button disabled={busy} className={'star '+(data.favourites.includes(s.id)?'starred':'')} aria-label={(data.favourites.includes(s.id)?'Unfavourite ':'Favourite ')+s.name} onClick={()=>star(s.id)}><Star size={17} fill={data.favourites.includes(s.id)?'currentColor':'none'}/></button></div>})}</div>{!shown.length&&<div className="empty"><Search size={28}/><h3>{tab==='favourites'?'Your favourite schemes belong here':'No schemes found'}</h3><p>{tab==='favourites'?'Tap a star on any scheme to save it here.':'Try another search or filter.'}</p><button className="secondary" onClick={()=>{setQuery('');setFilter('All');setTab('all')}}>Show all schemes</button></div>}<div className="catalogfoot"><span className="sampledot"/> Scheme master · 14 Sep 2026 · Sample clients{browserEdition()&&" · Data saved in this browser"}</div></div></div></section><aside className="cart desktopcart">{Cart()}</aside></AllocationSplit><footer className="pagefoot"><span>PUROHIT ASSOCIATES LLP</span><span>Investing with integrity.</span><span>Allocation workspace · ARN 110015</span></footer></div><div className="mobilesticky"><span><b>{lines.length} schemes</b><small>Allocated {money(allocated)}</small></span><span className={remaining<0?'red':''}><small>{remaining<0?'Over allocated':'Remaining'}</small><b>{money(Math.abs(remaining))}</b></span><button className="primary" onClick={()=>setDrawer(true)}>View cart <ShoppingBasket size={18}/></button></div><Sheet open={drawer} onOpenChange={setDrawer}><SheetContent className="cartdrawer"><SheetTitle className="sr-only">Allocation cart</SheetTitle><div className="cart">{Cart()}</div></SheetContent></Sheet><Dialog open={!!panel} onOpenChange={open=>{if(!open)setPanel(null)}}><DialogContent className={'appdialog '+(panel==='record'?'recorddialog':panel==='portfolio'?'portfoliodialog':'')}><DialogTitle>{({drafts:'Saved drafts',history:'Allocation history',baskets:'Allocation baskets',admin:'Admin / Data',portfolio:'Existing portfolio',newclient:'New client',clients:'Client list',schemes:'Scheme list',record:view?.status==='final'?'Allocation confirmed':'Allocation draft'} as any)[panel||'']}</DialogTitle><DialogDescription>{({drafts:'Pick up where you left off.',history:'View and print finalised allocations.',baskets:'Apply a saved mix to the current investment amount.',admin:'Import approved client and scheme masters. IDs must be unique.',portfolio:'Review existing holdings and reuse folios for new investments.',newclient:'Create a client and start allocating immediately.',clients:'Search, select, edit or delete clients.',schemes:'Search, select, edit or delete schemes.',record:'Purohit Associates LLP · ARN 110015'} as any)[panel||'']}</DialogDescription>{(panel==='drafts'||panel==='history')&&<><div className="searchfield"><Search size={18}/><input placeholder="Search client, Iwell ID, date or scheme…" aria-label="Search allocation history" value={historyQuery} onChange={e=>setHistoryQuery(e.target.value)}/></div><div className="recordlist">{data.records.filter(r=>r.status===(panel==='drafts'?'draft':'final')&&matches(r.client.name+' '+r.client.id+' '+r.date+' '+new Date(r.date).toLocaleDateString('en-IN')+' '+r.lines.map(l=>l.scheme.official).join(' '),historyQuery)).map(r=><article key={r.id}><div><b>{r.client.name}</b><small>{r.client.id} · {new Date(r.date).toLocaleString('en-IN')}</small><span>{r.lines.length} schemes</span></div><b>{money(r.total)}</b>{r.status==='draft'?<><button className="secondary" onClick={()=>loadDraft(r)}>Resume</button><button className="iconbtn" aria-label="Delete draft" onClick={()=>setConfirm({title:'Delete this draft?',description:'This saved draft will be permanently removed.',run:()=>{work(async()=>{await api({action:'deleteDraft',id:r.id});await refresh()})}})}><X size={17}/></button></>:<button className="secondary" onClick={()=>{setView(r);setPanel('record')}}>View <ChevronRight size={17}/></button>}</article>)}{!data.records.some(r=>r.status===(panel==='drafts'?'draft':'final')&&matches(r.client.name+' '+r.client.id+' '+r.date+' '+new Date(r.date).toLocaleDateString('en-IN')+' '+r.lines.map(l=>l.scheme.official).join(' '),historyQuery))&&<div className="empty"><FolderOpen size={30}/><h3>No allocations to show</h3><p>{historyQuery?'Try a different search.':'Your saved allocations will appear here.'}</p></div>}</div></>}{panel==='baskets'&&<><div className="basketlist">{data.baskets.map(b=><button key={b.id} onClick={()=>applyBasket(b)}><Layers3 size={23}/><div><b>{b.name}</b><small>{b.items.length} schemes · {b.items.map(x=>x.pct+'%').join(' / ')}</small></div><ArrowRight size={18}/></button>)}</div><section className="savebasket"><h3>Save the current mix as a basket</h3><p>Fully allocate your investment before saving a reusable mix.</p><input aria-label="Basket name" placeholder="e.g. Multi Asset Allocation" value={basketName} onChange={e=>setBasketName(e.target.value)}/><button className="primary" disabled={!complete||!basketName.trim()||busy} onClick={()=>work(async()=>{await api({action:'basket',basket:{id:crypto.randomUUID(),name:basketName.trim(),items:lines.map(l=>({id:l.scheme.id,pct:l.amount/total*100}))}});setBasketName('');await refresh();setNotice('Allocation basket saved.')})}>Save basket</button></section></>}{panel==='newclient'&&<NewClient clients={data.clients} onSave={async c=>{await api({action:'import',kind:'clients',rows:[c]});await refresh();selectClient(c);setPanel(null);setNotice('New client created and selected.')}}/>}{panel==='portfolio'&&client&&<PortfolioManager key={client.id} client={client} portfolio={portfolio} schemes={data.schemes} onAdd={addHolding} onSave={async p=>{await api({action:'portfolio',portfolio:p});await refresh();setLines(ls=>ls.map(l=>{if(l.folioMode==='manual'||l.folio)return l;const fs=foliosFor(l.scheme.amc,p.holdings);return fs.length?{...l,folioMode:'existing' as const,folio:fs.length===1?fs[0]:''}:l}))}}/>}{(panel==='clients'||panel==='schemes')&&<MasterManager key={panel} kind={panel} rows={data[panel]} onSave={async p=>{await api(p);await refresh();if(p.kind==='clients')setClient(c=>!c?null:p.action==='deleteMaster'?(p.ids.includes(c.id)?null:c):c.id===p.id?{...p.record,id:p.record.id.trim(),name:p.record.name.trim()}:c);else setLines(ls=>ls.flatMap(l=>p.action==='deleteMaster'?(p.ids.includes(l.scheme.id)?[]:[l]):l.scheme.id===p.id?(p.record.active?[{...l,scheme:{...p.record,id:p.record.id.trim()}}]:[]):[l]));setNotice(p.action==='deleteMaster'?'Selected records deleted.':'Details updated.')}}/>}{panel==='admin'&&<><Tabs value={importKind} onValueChange={v=>{setImportKind(String(v));setImportRows([]);setFileName('');setImportError('')}}><TabsList className="navtabs"><TabsTrigger value="clients">Client master</TabsTrigger><TabsTrigger value="schemes">Scheme master</TabsTrigger></TabsList></Tabs><div className="importstats"><b>{importKind==='clients'?data.clients.length:data.schemes.length}</b> existing {importKind} <span>New IDs are added; existing records are preserved.</span></div><button className="secondary" onClick={()=>download(importKind+'-template.csv',csv([importKind==='clients'?['Iwell ID','Client Name']:['Scheme ID','Official Scheme Name','Display Name','AMC','Category','Plan','Option','Active / Inactive']]))}><Download size={17}/> Download CSV template</button><label className="upload"><Database size={28}/><b>Choose an Excel or CSV file</b><span>.xlsx or .csv · Up to 20 MB / 20,000 rows</span><input key={importKind} type="file" accept=".csv,.xlsx" onChange={e=>{if(e.target.files?.[0])importFile(e.target.files[0])}}/></label>{importError&&<p className="red" role="alert">{importError}</p>}{importRows.length>0&&<><p><b>{fileName}</b> · {importRows.length} valid rows</p><div className="importpreview">{importRows.slice(0,5).map(r=><p key={r.id}><b>{r.id}</b> {r.name}</p>)}</div><button className="primary" disabled={busy||!loaded} onClick={()=>work(async()=>{await api({action:'import',kind:importKind,rows:importRows});setImportRows([]);setFileName('');await refresh();setNotice('Master data imported successfully.')})}>Import {importRows.length} {importKind}</button></>}<p className="hint">Scheme master loaded from Top Schemes, 14 Sep 2026. Scheme names are preserved as supplied; client records remain sample data.</p></>}{panel==='record'&&view&&<><div className="confirmation"><CheckCircle2 size={28}/><div><h3>{view.client.name}</h3><p>{view.client.id} · {new Date(view.date).toLocaleString('en-IN',{timeZone:'Asia/Kolkata'})} IST</p></div><b>{money(view.total)}</b></div><Table><TableHeader><TableRow><TableHead>Official scheme name</TableHead><TableHead>Folio</TableHead><TableHead>Amount</TableHead><TableHead>%</TableHead></TableRow></TableHeader><TableBody>{view.lines.map(l=><TableRow key={l.scheme.id}><TableCell><b>{l.scheme.official}</b><small className="tablemeta">{l.scheme.amc} · {l.scheme.category}</small></TableCell><TableCell>{l.folio||(l.folioMode==='new'?'New folio':'Not specified')}</TableCell><TableCell>{money(l.amount)}</TableCell><TableCell>{(l.amount/view.total*100).toFixed(2)}%</TableCell></TableRow>)}</TableBody></Table><div className="recordactions"><button className="secondary" onClick={()=>printAllocation(view)}><Printer size={17}/>Print</button><button className="secondary" onClick={()=>download('allocation-'+view.client.id+'-'+view.date.slice(0,10)+'.csv',csv(recordRows(view)))}><Download size={17}/>Export CSV</button><button className="secondary" onClick={()=>work(async()=>{await navigator.clipboard.writeText(recordRows(view).map(r=>r.join('\t')).join('\n'));setNotice('Allocation copied.')})}><Copy size={17}/>Copy</button></div></>}</DialogContent></Dialog><AlertDialog open={!!confirm} onOpenChange={v=>{if(!v)setConfirm(null)}}><AlertDialogContent><AlertDialogTitle>{confirm?.title}</AlertDialogTitle><AlertDialogDescription>{confirm?.description}</AlertDialogDescription><div className="confirmbuttons"><AlertDialogCancel>Cancel</AlertDialogCancel><button className="primary" onClick={()=>{const run=confirm?.run;setConfirm(null);run?.()}}>Continue</button></div></AlertDialogContent></AlertDialog>{notice&&<div className="toast" role="status"><CheckCircle2 size={18}/>{notice}<button aria-label="Dismiss notification" onClick={()=>setNotice('')}><X size={16}/></button></div>}</main>}
-
-
-
-
-
-
-
+import { browserEdition, localData } from '@/lib/browser-storage';
+import {
+  Search,
+  ShoppingBasket,
+  Layers3,
+  Building2,
+  Star,
+  Clock3,
+  LayoutGrid,
+  History,
+  Database,
+  FolderOpen,
+  RotateCcw,
+  Plus,
+  Check,
+  X,
+  ArrowRight,
+  Save,
+  Equal,
+  Percent,
+  Download,
+  Copy,
+  Printer,
+  UserRound,
+  ChevronRight,
+  CheckCircle2,
+  AlertCircle,
+} from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Combobox,
+  ComboboxInput,
+  ComboboxContent,
+  ComboboxList,
+  ComboboxItem,
+  ComboboxEmpty,
+} from '@/components/ui/combobox';
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogCancel,
+} from '@/components/ui/alert-dialog';
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableHead,
+  TableRow,
+  TableCell,
+} from '@/components/ui/table';
+import {
+  categories,
+  sampleClients,
+  sampleBaskets,
+  money,
+  parseMoney,
+  splitAmount,
+  matches,
+  validateAllocation,
+  type Client,
+  type Scheme,
+  type Line,
+  type Allocation,
+  type Basket,
+} from '@/lib/domain';
+type Data = {
+  portfolios?: Portfolio[];
+  clients: Client[];
+  schemes: Scheme[];
+  records: Allocation[];
+  baskets: Basket[];
+  favourites: string[];
+  recent: string[];
+};
+const initial: Data = {
+  clients: sampleClients,
+  schemes: uploadedSchemes,
+  records: [],
+  baskets: sampleBaskets,
+  favourites: [],
+  recent: [],
+};
+async function api(payload: unknown) {
+  if (browserEdition()) return localData(payload);
+  const r = await fetch('/api/data', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const j: any = await r.json();
+  if (!r.ok) throw Error(j.error || 'Unable to save.');
+  return j;
+}
+function download(name: string, text: string, type = 'text/csv;charset=utf-8') {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type }));
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+const csv = (rows: unknown[][]) =>
+  '\uFEFF' +
+  rows
+    .map((r) =>
+      r
+        .map(
+          (x) =>
+            '"' +
+            String(x ?? '')
+              .replace(/^[=+@-]/, "'$&")
+              .replace(/"/g, '""') +
+            '"',
+        )
+        .join(','),
+    )
+    .join('\r\n');
+const recordRows = (a: Allocation) => [
+  [
+    'Date',
+    'Time',
+    'Client Name',
+    'Iwell ID',
+    'Total Investment',
+    'Official Scheme Name',
+    'AMC',
+    'Category',
+    'Folio',
+    'Amount',
+    'Percentage',
+  ],
+  ...a.lines.map((l) => [
+    new Date(a.date).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }),
+    new Date(a.date).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' }),
+    a.client.name,
+    a.client.id,
+    a.total / 100,
+    l.scheme.official,
+    l.scheme.amc,
+    l.scheme.category,
+    l.folio || '',
+    l.amount / 100,
+    ((l.amount / a.total) * 100).toFixed(2),
+  ]),
+];
+export default function Home() {
+  const [data, setData] = useState<Data>(initial),
+    [loaded, setLoaded] = useState(false),
+    [error, setError] = useState(''),
+    [notice, setNotice] = useState(''),
+    [busy, setBusy] = useState(false),
+    [client, setClient] = useState<Client | null>(null),
+    [total, setTotal] = useState(200000000),
+    [lines, setLines] = useState<Line[]>([]),
+    [draftId, setDraftId] = useState<string | null>(null),
+    [tab, setTab] = useState('category'),
+    [filter, setFilter] = useState('All'),
+    [query, setQuery] = useState(''),
+    [panel, setPanel] = useState<string | null>(null),
+    [drawer, setDrawer] = useState(false),
+    [pctMode, setPctMode] = useState(false),
+    [historyQuery, setHistoryQuery] = useState(''),
+    [view, setView] = useState<Allocation | null>(null),
+    [confirm, setConfirm] = useState<null | {
+      title: string;
+      description: string;
+      run: () => void;
+    }>(null),
+    [basketName, setBasketName] = useState(''),
+    [importKind, setImportKind] = useState('clients'),
+    [importRows, setImportRows] = useState<any[]>([]),
+    [importError, setImportError] = useState(''),
+    [fileName, setFileName] = useState(''),
+    [date, setDate] = useState(''),
+    [draftSelection, setDraftSelection] = useState<string[]>([]);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const stateRef = useRef<any>(null);
+  const allocated = lines.reduce((s, l) => s + l.amount, 0),
+    remaining = total - allocated,
+    complete =
+      !!client &&
+      total > 0 &&
+      remaining === 0 &&
+      lines.length > 0 &&
+      lines.every((l) => l.amount > 0);
+  async function refresh() {
+    try {
+      if (browserEdition()) {
+        setData(await localData());
+        setLoaded(true);
+        setError('');
+        return;
+      }
+      const r = await fetch('/api/data');
+      const j: any = await r.json();
+      if (!r.ok) throw Error(j.error);
+      setData(j);
+      setLoaded(true);
+      setError('');
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+  useEffect(() => {
+    refresh();
+    const tick = () =>
+      setDate(
+        new Date().toLocaleString('en-IN', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          timeZone: 'Asia/Kolkata',
+        }) + ' IST',
+      );
+    tick();
+    const t = setInterval(tick, 30000);
+    return () => clearInterval(t);
+  }, []);
+  useEffect(() => {
+    let armedUntil = 0;
+    const reset = () => {
+      armedUntil = 0;
+    };
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        panel ||
+        drawer ||
+        confirm ||
+        e.isComposing ||
+        target?.closest(
+          'input,textarea,select,[contenteditable="true"],[role="textbox"]',
+        )
+      ) {
+        reset();
+        return;
+      }
+      if (e.key === 'Alt' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        armedUntil = Date.now() + 3000;
+        return;
+      }
+      const keys: Record<string, string> = {
+        h: 'house',
+        c: 'category',
+        f: 'favourites',
+        r: 'recent',
+        a: 'all',
+      };
+      const tabId = keys[e.key.toLowerCase()];
+      if (
+        tabId &&
+        (e.altKey || Date.now() < armedUntil) &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.shiftKey &&
+        !e.getModifierState('AltGraph')
+      ) {
+        e.preventDefault();
+        reset();
+        setTab(tabId);
+        setFilter('All');
+        document
+          .querySelector<HTMLButtonElement>('[data-scheme-tab="' + tabId + '"]')
+          ?.focus({ preventScroll: true });
+      } else reset();
+    };
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('blur', reset);
+    window.addEventListener('pointerdown', reset);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('blur', reset);
+      window.removeEventListener('pointerdown', reset);
+    };
+  }, [panel, drawer, confirm]);
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(() => setNotice(''), 4500);
+    return () => clearTimeout(t);
+  }, [notice]);
+  useEffect(() => {
+    const f = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        searchRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', f);
+    return () => window.removeEventListener('keydown', f);
+  }, []);
+  async function work(fn: () => Promise<void>) {
+    setBusy(true);
+    try {
+      await fn();
+    } catch (e) {
+      setNotice((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const portfolio = data.portfolios?.find((p) => p.clientId === client?.id);
+  const portfolioTotal =
+    portfolio?.holdings.reduce((sum, holding) => sum + holding.value, 0) || 0;
+  const heldByScheme = new Map(
+    (portfolio?.holdings || [])
+      .filter((holding) => holding.schemeId)
+      .map((holding) => [holding.schemeId, holding]),
+  );
+  const amcTotals = new Map<string, number>();
+  portfolio?.holdings.forEach((holding) =>
+    amcTotals.set(holding.amc, (amcTotals.get(holding.amc) || 0) + holding.value),
+  );
+  const folioDefaults = (
+    _scheme?: Scheme,
+    _client?: Client | null,
+  ): Pick<Line, 'folio'> => ({ folio: '' });
+  function selectClient(c: Client | null) {
+    setClient(c);
+    setDraftId(null);
+    setLines((ls) => ls.map((l) => ({ ...l, ...folioDefaults(l.scheme, c) })));
+  }
+  function addHolding(s: Scheme, _folio: string) {
+    setLines((ls) =>
+      ls.some((l) => l.scheme.id === s.id)
+        ? ls
+        : [...ls, { scheme: s, amount: 0, folio: '' }],
+    );
+    setNotice('Added to the new-investment cart.');
+  }
+  function setFolio(id: string, changes: Partial<Line>) {
+    setLines((ls) =>
+      ls.map((l) => (l.scheme.id === id ? { ...l, ...changes } : l)),
+    );
+  }
+  function add(s: Scheme) {
+    const selected = lines.some((l) => l.scheme.id === s.id);
+    setLines((ls) =>
+      ls.some((l) => l.scheme.id === s.id)
+        ? ls.filter((l) => l.scheme.id !== s.id)
+        : [...ls, { scheme: s, amount: 0, ...folioDefaults(s) }],
+    );
+    if (selected) return;
+    const next = [s.id, ...data.recent.filter((id) => id !== s.id)].slice(
+      0,
+      40,
+    );
+    setData((d) => ({ ...d, recent: next }));
+    api({ action: 'preference', key: 'recent', value: next }).catch(() =>
+      setNotice('Recent selection could not be saved.'),
+    );
+  }
+  function amount(id: string, n: number) {
+    setLines((ls) =>
+      ls.map((l) => (l.scheme.id === id ? { ...l, amount: n } : l)),
+    );
+  }
+  function equal() {
+    const values = splitAmount(
+      total,
+      lines.map(() => 1),
+    );
+    setLines((ls) => ls.map((l, i) => ({ ...l, amount: values[i] })));
+  }
+  function clear() {
+    setClient(null);
+    setLines([]);
+    setTotal(0);
+    setDraftId(null);
+    setDrawer(false);
+  }
+  function askClear() {
+    setConfirm({
+      title: 'Clear this allocation?',
+      description:
+        'Unsaved client selection and amounts will be cleared. Saved drafts and history will remain available.',
+      run: clear,
+    });
+  }
+  async function save(final: boolean, saveAsNew = false) {
+    await work(async () => {
+      const a: Allocation = {
+        id: saveAsNew ? crypto.randomUUID() : draftId || crypto.randomUUID(),
+        client: client!,
+        total,
+        lines,
+        status: final ? 'final' : 'draft',
+        date: new Date().toISOString(),
+      };
+      validateAllocation(a, final);
+      const saved = await api({ action: 'save', record: a });
+      await refresh();
+      if (final) {
+        setView(saved);
+        setPanel('record');
+        setLines([]);
+        setDraftId(null);
+        setDrawer(false);
+      } else {
+        setDraftId(saved.id);
+        setNotice(
+          saveAsNew
+            ? 'A new draft version was saved.'
+            : 'Draft saved. Continue whenever you’re ready.',
+        );
+      }
+    });
+  }
+  function loadDraft(a: Allocation) {
+    const run = () => {
+      setClient(a.client);
+      setTotal(a.total);
+      setLines(
+        a.lines.map((l) => ({
+          ...l,
+          folio: l.folio || '',
+        })),
+      );
+      setDraftId(a.id);
+      setPanel(null);
+      setNotice('Draft restored.');
+    };
+    if (lines.length)
+      setConfirm({
+        title: 'Replace the current allocation?',
+        description: 'Unsaved changes will be replaced by this draft.',
+        run,
+      });
+    else run();
+  }
+  function applyBasket(b: Basket) {
+    const run = () => {
+      if (total <= 0) {
+        setNotice('Enter the investment amount before applying a basket.');
+        return;
+      }
+      const found = b.items.map((x) =>
+        data.schemes.find((s) => s.id === x.id && s.active),
+      );
+      if (found.some((s) => !s)) {
+        setNotice('This basket contains an inactive or unavailable scheme.');
+        return;
+      }
+      const values = splitAmount(
+        total,
+        b.items.map((x) => x.pct),
+      );
+      setLines(
+        found.map((s, i) => ({
+          scheme: s!,
+          amount: values[i],
+          ...folioDefaults(s!),
+        })),
+      );
+      setPanel(null);
+      setNotice(b.name + ' applied.');
+    };
+    if (lines.length)
+      setConfirm({
+        title: 'Replace selected schemes?',
+        description:
+          'This basket will replace your current scheme selection and amounts.',
+        run,
+      });
+    else run();
+  }
+  async function star(id: string) {
+    const next = data.favourites.includes(id)
+      ? data.favourites.filter((x) => x !== id)
+      : [...data.favourites, id];
+    await work(async () => {
+      await api({ action: 'preference', key: 'favourites', value: next });
+      setData((d) => ({ ...d, favourites: next }));
+    });
+  }
+  const active = data.schemes.filter((s) => s.active);
+  const amcs = [...new Set(active.map((s) => s.amc))].sort();
+  const options =
+    tab === 'house'
+      ? amcs
+      : [...new Set([...categories, ...active.map((s) => s.category)])];
+  const shown = active.filter(
+    (s) =>
+      (filter === 'All' ||
+        (tab === 'category'
+          ? s.category === filter
+          : tab === 'house'
+            ? s.amc === filter
+            : true)) &&
+      (tab !== 'favourites' || data.favourites.includes(s.id)) &&
+      (tab !== 'recent' || data.recent.includes(s.id)) &&
+      matches(
+        s.name + ' ' + s.official + ' ' + s.category + ' ' + s.amc,
+        query,
+      ),
+  );
+  if (tab === 'recent')
+    shown.sort((a, b) => data.recent.indexOf(a.id) - data.recent.indexOf(b.id));
+  const visibleRecords = data.records.filter(
+    (record) =>
+      record.status === (panel === 'drafts' ? 'draft' : 'final') &&
+      matches(
+        `${record.client.name} ${record.client.id} ${record.date} ${new Date(record.date).toLocaleDateString('en-IN')} ${record.lines.map((line) => line.scheme.official).join(' ')}`,
+        historyQuery,
+      ),
+  );
+  async function exportWorkbook(records: Allocation[], name: string) {
+    const { downloadAllocationsXlsx } = await import('@/lib/export-xlsx');
+    downloadAllocationsXlsx(records, name);
+  }
+  async function importFile(file: File) {
+    setImportRows([]);
+    setImportError('');
+    setFileName(file.name);
+    try {
+      if (file.size > 20e6) throw Error('Choose a file smaller than 20 MB.');
+      let rows: any[][] = [];
+      if (file.name.toLowerCase().endsWith('.xlsx')) {
+        const { default: read } = await import('read-excel-file/browser');
+        rows = (await read(file))[0].data;
+      } else if (file.name.toLowerCase().endsWith('.csv')) {
+        const { default: Papa } = await import('papaparse');
+        const parsed = Papa.parse(await file.text(), {
+          skipEmptyLines: 'greedy',
+        });
+        if (parsed.errors.length)
+          throw Error('CSV could not be read: ' + parsed.errors[0].message);
+        rows = parsed.data as any[][];
+      } else throw Error('Choose an .xlsx or .csv file.');
+      if (rows.length < 2) throw Error('The file has no data rows.');
+      const heads = rows[0].map((x) =>
+        String(x ?? '')
+          .trim()
+          .toLowerCase(),
+      );
+      const get = (row: any[], key: string) =>
+        String(row[heads.indexOf(key.toLowerCase())] ?? '').trim();
+      const required =
+        importKind === 'clients'
+          ? ['Iwell ID', 'Client Name']
+          : [
+              'Scheme ID',
+              'Official Scheme Name',
+              'Display Name',
+              'AMC',
+              'Category',
+            ];
+      for (const h of required)
+        if (!heads.includes(h.toLowerCase()))
+          throw Error('Missing column: ' + h);
+      const ids = new Set();
+      const existing = new Set(
+        (importKind === 'clients' ? data.clients : data.schemes).map(
+          (x) => x.id,
+        ),
+      );
+      const parsed = rows
+        .slice(1)
+        .filter((r) => r.some((x) => x !== null && String(x).trim()))
+        .map((r, i) => {
+          const id = get(
+            r,
+            importKind === 'clients' ? 'Iwell ID' : 'Scheme ID',
+          );
+          const name = get(
+            r,
+            importKind === 'clients' ? 'Client Name' : 'Display Name',
+          );
+          if (!id || !name)
+            throw Error(`Row ${i + 2}: ID and name are required.`);
+          if (ids.has(id) || existing.has(id))
+            throw Error(`Row ${i + 2}: duplicate or existing ID ${id}.`);
+          ids.add(id);
+          if (importKind === 'clients') return { id, name };
+          const official = get(r, 'Official Scheme Name'),
+            amc = get(r, 'AMC'),
+            category = get(r, 'Category');
+          if (!official || !amc || !category)
+            throw Error(
+              `Row ${i + 2}: official name, AMC and category are required.`,
+            );
+          const status = get(r, 'Active / Inactive').toLowerCase();
+          if (status && !['active', 'inactive'].includes(status))
+            throw Error(`Row ${i + 2}: use Active or Inactive.`);
+          return {
+            id,
+            name,
+            official,
+            amc,
+            category,
+            plan: get(r, 'Plan'),
+            option: get(r, 'Option'),
+            active: status !== 'inactive',
+          };
+        });
+      if (!parsed.length || parsed.length > 20000)
+        throw Error('Import 1–20,000 rows at a time.');
+      setImportRows(parsed);
+    } catch (e) {
+      setImportError((e as Error).message);
+    }
+  }
+  stateRef.current = { data, client, total, lines, add, equal };
+  useEffect(() => {
+    const context = (document as any).modelContext;
+    if (!context?.registerTool) return;
+    const lifecycle = new AbortController();
+    const register = (tool: any) =>
+      Promise.resolve(
+        context.registerTool(tool, { signal: lifecycle.signal }),
+      ).catch(() => {});
+    register({
+      name: 'read_allocation',
+      description: 'Read the current staged allocation and available schemes.',
+      inputSchema: {
+        type: 'object',
+        properties: {},
+        additionalProperties: false,
+      },
+      annotations: { readOnlyHint: true },
+      execute: () => {
+        const s = stateRef.current;
+        return {
+          client: s.client,
+          total: s.total / 100,
+          lines: s.lines.map((l: Line) => ({
+            id: l.scheme.id,
+            name: l.scheme.name,
+            amount: l.amount / 100,
+          })),
+          schemes: s.data.schemes.filter((s: Scheme) => s.active),
+        };
+      },
+    });
+    register({
+      name: 'stage_allocation',
+      description:
+        'Select a client and schemes with amounts in rupees for review. Does not finalise or save.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          clientId: { type: 'string' },
+          total: { type: 'number' },
+          lines: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                schemeId: { type: 'string' },
+                amount: { type: 'number' },
+              },
+              required: ['schemeId', 'amount'],
+            },
+          },
+        },
+        required: ['clientId', 'total', 'lines'],
+        additionalProperties: false,
+      },
+      annotations: { readOnlyHint: false },
+      execute: async (input: any) => {
+        const s = stateRef.current,
+          c = s.data.clients.find((c: Client) => c.id === input.clientId);
+        if (
+          !c ||
+          !Number.isFinite(input.total) ||
+          input.total <= 0 ||
+          !Array.isArray(input.lines)
+        )
+          throw Error('Invalid client or investment.');
+        const ls = input.lines.map((l: any) => {
+          const scheme = s.data.schemes.find(
+            (x: Scheme) => x.id === l.schemeId && x.active,
+          );
+          if (!scheme || !Number.isFinite(l.amount) || l.amount < 0)
+            throw Error('Invalid scheme or amount');
+          return {
+            scheme,
+            amount: Math.round(l.amount * 100),
+            ...folioDefaults(scheme, c),
+          };
+        });
+        validateAllocation({
+          client: c,
+          total: Math.round(input.total * 100),
+          lines: ls,
+        } as Allocation);
+        setClient(c);
+        setTotal(Math.round(input.total * 100));
+        setLines(ls);
+        setDraftId(null);
+        await new Promise((r) => requestAnimationFrame(() => r(null)));
+        return { status: 'staged', schemes: ls.length };
+      },
+    });
+    return () => lifecycle.abort();
+  }, []);
+  const Cart = () => (
+    <>
+      <div className="cartheading">
+        <ShoppingBasket size={20} />
+        <h2>Allocation cart</h2>
+        <span className="count">{lines.length}</span>
+      </div>
+      <p className="cartsub">
+        {lines.length
+          ? `${lines.length} schemes selected`
+          : 'Build your allocation'}
+      </p>
+      <div className="fasttools">
+        <button disabled={!lines.length || !total} onClick={equal}>
+          <Equal size={17} /> Equal allocate
+        </button>
+        <button
+          className={pctMode ? 'on' : ''}
+          onClick={() => setPctMode(!pctMode)}
+        >
+          <Percent size={16} /> By %
+        </button>
+      </div>
+      <div className="cartitems">
+        {!lines.length ? (
+          <div className="empty">
+            <div className="emptyicon">
+              <ShoppingBasket size={30} />
+            </div>
+            <h3>Your allocation starts here</h3>
+            <p>
+              Tap a scheme to add it.
+              <br />
+              Assign amounts here in a few clicks.
+            </p>
+          </div>
+        ) : (
+          lines.map((l, i) => (
+            <div className="cartline" key={l.scheme.id}>
+              <div className="linename">
+                <span className="index">{String(i + 1).padStart(2, '0')}</span>
+                <strong>{l.scheme.name}</strong>
+                <button
+                  className="iconbtn"
+                  aria-label={'Remove ' + l.scheme.name}
+                  onClick={() =>
+                    setLines((ls) =>
+                      ls.filter((x) => x.scheme.id !== l.scheme.id),
+                    )
+                  }
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="lineamount">
+                <span>₹</span>
+                <input
+                  aria-label={'Amount for ' + l.scheme.name}
+                  inputMode="decimal"
+                  value={l.amount ? String(l.amount / 100) : ''}
+                  placeholder="0"
+                  onChange={(e) =>
+                    amount(l.scheme.id, parseMoney(e.target.value))
+                  }
+                />
+                {pctMode ? (
+                  <label>
+                    <input
+                      aria-label={'Percentage for ' + l.scheme.name}
+                      inputMode="decimal"
+                      value={total ? +((l.amount / total) * 100).toFixed(2) : 0}
+                      onChange={(e) => {
+                        const n = Number(e.target.value);
+                        if (Number.isFinite(n) && n >= 0 && n <= 100)
+                          amount(l.scheme.id, Math.round((total * n) / 100));
+                      }}
+                    />
+                    %
+                  </label>
+                ) : (
+                  <span className="pct">
+                    {total ? ((l.amount / total) * 100).toFixed(1) : '0'}%
+                  </span>
+                )}
+                <input
+                  className="folioinput"
+                  aria-label={'Folio number for ' + l.scheme.name}
+                  placeholder="Folio no. (optional)"
+                  maxLength={80}
+                  value={l.folio || ''}
+                  onChange={(e) =>
+                    setFolio(l.scheme.id, { folio: e.target.value })
+                  }
+                />
+              </div>
+              {pctMode && (
+                <div className="quickpcts">
+                  {[10, 15, 20, 25, 30, 40, 50].map((p) => (
+                    <button
+                      key={p}
+                      onClick={() =>
+                        amount(l.scheme.id, Math.round((total * p) / 100))
+                      }
+                    >
+                      {p}%
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))
+        )}
+      </div>
+      <div className="cartsummary">
+        <div className="summarynumbers">
+          <div>
+            <span>Total investment</span>
+            <b>{money(total)}</b>
+          </div>
+          <div>
+            <span>Total allocated</span>
+            <b>{money(allocated)}</b>
+          </div>
+          <div
+            className={remaining < 0 ? 'summarybalance red' : 'summarybalance'}
+          >
+            <span>{remaining < 0 ? 'Over allocated' : 'Remaining'}</span>
+            <b>{money(Math.abs(remaining))}</b>
+          </div>
+        </div>
+        <div className="allocationbar">
+          <i
+            style={{
+              width: Math.min(100, total ? (allocated / total) * 100 : 0) + '%',
+            }}
+          />
+        </div>
+        <small className={remaining < 0 ? 'red' : ''}>
+          {remaining < 0
+            ? 'Reduce allocations to continue.'
+            : complete
+              ? 'Fully allocated. Ready to finalise.'
+              : (total ? ((allocated / total) * 100).toFixed(1) : 0) +
+                '% allocated'}
+        </small>
+      </div>
+      <button
+        className="primary finalise"
+        disabled={!complete || busy || !loaded}
+        onClick={() => save(true)}
+      >
+        Finalise allocation <ArrowRight size={18} />
+      </button>
+      <button
+        className="savedraft"
+        disabled={!client || !lines.length || !total || busy || !loaded}
+        onClick={() => save(false, true)}
+      >
+        <Save size={16} /> Save as new draft
+      </button>
+      {draftId && (
+        <button
+          className="savedraft"
+          disabled={!client || !lines.length || !total || busy || !loaded}
+          onClick={() => save(false)}
+        >
+          <Save size={16} /> Update current draft
+        </button>
+      )}
+    </>
+  );
+  return (
+    <main>
+      <header className="brand">
+        <img
+          src={browserEdition() ? './logo.png' : '/logo.png'}
+          alt="Purohit Associates LLP — AMFI Registered Mutual Fund Distributor 110015 — Investing with integrity"
+        />
+        <span>
+          AMFI Registered Mutual Fund Distributor
+          <br />
+          <b>ARN – 110015</b>
+        </span>
+        <div className="headerend">
+          <span className="internal">
+            <i /> INTERNAL WORKSPACE
+          </span>
+          <small>{date}</small>
+        </div>
+      </header>
+      <div className="workspace">
+        <div className="titleline">
+          <div>
+            <p className="eyebrow">INVESTMENT DESK</p>
+            <h1>Allocation console</h1>
+          </div>
+          <div className="topactions">
+            <button onClick={() => setPanel('drafts')}>
+              <FolderOpen size={17} />
+              <span>Drafts</span>
+              <em>{data.records.filter((r) => r.status === 'draft').length}</em>
+            </button>
+            <button onClick={() => setPanel('history')}>
+              <History size={17} />
+              <span>History</span>
+            </button>
+            <button onClick={() => setPanel('clients')}>
+              <UserRound size={17} />
+              <span>Clients</span>
+            </button>
+            <button onClick={() => setPanel('schemes')}>
+              <Layers3 size={17} />
+              <span>Schemes</span>
+            </button>
+            <button onClick={() => setPanel('admin')}>
+              <Database size={17} />
+              <span>Admin / Data</span>
+            </button>
+          </div>
+        </div>
+        {error && (
+          <div className="errorbar">
+            <AlertCircle size={18} />
+            {error}
+            <button onClick={refresh}>Retry connection</button>
+          </div>
+        )}
+        <section className="clientbar">
+          <div className="clientpicker">
+            <label>
+              01 <span>SELECT CLIENT</span>
+            </label>
+            <Combobox
+              items={data.clients}
+              value={client}
+              onValueChange={(v) => selectClient(v as Client | null)}
+              itemToStringLabel={(c: Client) => c.name + ' · ' + c.id}
+            >
+              <ComboboxInput
+                placeholder="Search by Iwell ID or client name"
+                aria-label="Search client"
+                className="clientinput"
+                showClear
+              />
+              <ComboboxContent>
+                <ComboboxEmpty>
+                  No matching client. Use New client to create one.
+                </ComboboxEmpty>
+                <ComboboxList>
+                  {(c: Client) => (
+                    <ComboboxItem key={c.id} value={c} className="clientoption">
+                      <UserRound size={18} />
+                      <span>
+                        <b>{c.name}</b>
+                        <small>{c.id}</small>
+                      </span>
+                    </ComboboxItem>
+                  )}
+                </ComboboxList>
+              </ComboboxContent>
+            </Combobox>
+            <div className="clienttools">
+              <button
+                className="secondary"
+                onClick={() => setPanel('newclient')}
+              >
+                <Plus size={14} />
+                New client
+              </button>
+              <button
+                className="secondary"
+                disabled={!client}
+                onClick={() => setPanel('portfolio')}
+              >
+                <FolderOpen size={14} />
+                Existing portfolio
+                {portfolio ? ' (' + portfolio.holdings.length + ')' : ''}
+              </button>
+            </div>
+          </div>
+          <div className="investment">
+            <label htmlFor="investment">
+              02 <span>INVESTMENT AMOUNT</span>
+            </label>
+            <div className="investmentfield">
+              <span>₹</span>
+              <input
+                id="investment"
+                inputMode="decimal"
+                value={
+                  total
+                    ? (total / 100).toLocaleString('en-IN', {
+                        maximumFractionDigits: 2,
+                      })
+                    : ''
+                }
+                placeholder="Enter amount"
+                onChange={(e) => setTotal(parseMoney(e.target.value))}
+              />
+              <span className="inr">INR</span>
+            </div>
+          </div>
+          <button className="reset" onClick={askClear}>
+            <RotateCcw size={16} />
+            Reset
+          </button>
+        </section>
+        <AllocationSplit>
+          <section className="selection">
+            <div className="navrow">
+              <Tabs
+                value={tab}
+                onValueChange={(v) => {
+                  setTab(String(v));
+                  setFilter('All');
+                }}
+              >
+                <TabsList className="navtabs">
+                  {[
+                    ['house', 'By fund house', Building2, 'H'],
+                    ['category', 'By category', Layers3, 'C'],
+                    ['favourites', 'Favourites', Star, 'F'],
+                    ['recent', 'Recent', Clock3, 'R'],
+                    ['all', 'All schemes', LayoutGrid, 'A'],
+                  ].map(([value, label, Icon, key]: any) => (
+                    <TabsTrigger
+                      key={value}
+                      value={value}
+                      data-scheme-tab={value}
+                      aria-keyshortcuts={'Alt+' + key}
+                      title={
+                        label +
+                        '  -  Alt + ' +
+                        key +
+                        ' (or Alt, then ' +
+                        key +
+                        ')'
+                      }
+                    >
+                      <Icon size={16} />
+                      <span className="tabcaption">
+                        <span>{label}</span>
+                        <kbd className="tabshortcut">Alt + {key}</kbd>
+                      </span>
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </Tabs>
+            </div>
+            <div
+              className={
+                'catalog ' +
+                (!['category', 'house'].includes(tab) ? 'noside' : '')
+              }
+            >
+              {['category', 'house'].includes(tab) && (
+                <aside className="filters">
+                  <h3>{tab === 'house' ? 'FUND HOUSES' : 'CATEGORIES'}</h3>
+                  <button
+                    className={filter === 'All' ? 'active' : ''}
+                    onClick={() => setFilter('All')}
+                  >
+                    All {tab === 'house' ? 'fund houses' : 'categories'}
+                    <span>{active.length}</span>
+                  </button>
+                  {options.map((o) => (
+                    <button
+                      key={o}
+                      className={filter === o ? 'active' : ''}
+                      onClick={() => setFilter(o)}
+                    >
+                      {o.replace(' Mutual Fund', '')}
+                      <span>
+                        {
+                          active.filter(
+                            (s) => (tab === 'house' ? s.amc : s.category) === o,
+                          ).length
+                        }
+                      </span>
+                    </button>
+                  ))}
+                </aside>
+              )}
+              <div className="schemes">
+                <div className="searchfield">
+                  <Search size={19} />
+                  <input
+                    ref={searchRef}
+                    aria-label="Search schemes"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Search schemes…"
+                  />
+                  {query ? (
+                    <button
+                      className="iconbtn"
+                      aria-label="Clear scheme search"
+                      onClick={() => setQuery('')}
+                    >
+                      <X size={17} />
+                    </button>
+                  ) : (
+                    <kbd>⌘ / Ctrl K</kbd>
+                  )}
+                </div>
+                <div className="resultsheading">
+                  <h2>
+                    {filter !== 'All'
+                      ? filter
+                      : tab === 'favourites'
+                        ? 'Your favourites'
+                        : tab === 'recent'
+                          ? 'Recently selected'
+                          : 'All schemes'}
+                    <span>{shown.length}</span>
+                  </h2>
+                  <button onClick={() => setPanel('baskets')}>
+                    <Layers3 size={16} /> Baskets
+                  </button>
+                </div>
+                {client && portfolio && (
+                  <div className="portfoliocontext">
+                    <span>
+                      Existing portfolio <b>{money(portfolioTotal)}</b>
+                    </span>
+                    <span>
+                      {portfolio.holdings.filter((holding) => holding.schemeId).length}{' '}
+                      matched holdings
+                    </span>
+                    <button onClick={() => setPanel('portfolio')}>
+                      Review portfolio
+                    </button>
+                  </div>
+                )}
+                <div className="grid">
+                  {shown.map((s) => {
+                    const added = lines.some((l) => l.scheme.id === s.id);
+                    const existingHolding = heldByScheme.get(s.id);
+                    const amcValue = amcTotals.get(s.amc) || 0;
+                    return (
+                      <div
+                        className={'tile ' + (added ? 'selected' : '')}
+                        key={s.id}
+                      >
+                        <button
+                          className="tilemain"
+                          onClick={() => add(s)}
+                          aria-label={(added ? 'Remove ' : 'Add ') + s.name}
+                          aria-pressed={added}
+                        >
+                          <span className="amcrow">
+                            <span className="amcmark">
+                              {s.amc
+                                .split(' ')
+                                .map((w) => w[0])
+                                .slice(0, 2)
+                                .join('')}
+                            </span>
+                            <span>{s.amc.replace(' Mutual Fund', '')}</span>
+                          </span>
+                          <strong>{s.name}</strong>
+                          <span className="categorytag">{s.category}</span>
+                          {portfolio && (
+                            <span className="portfoliohint">
+                              {existingHolding ? (
+                                <b>Already held · {money(existingHolding.value)}</b>
+                              ) : (
+                                <span>Not currently held</span>
+                              )}
+                              <small>
+                                {s.amc.replace(' Mutual Fund', '')} exposure:{' '}
+                                {money(amcValue)}
+                                {portfolioTotal
+                                  ? ` · ${((amcValue / portfolioTotal) * 100).toFixed(1)}%`
+                                  : ''}
+                              </small>
+                            </span>
+                          )}
+                          <footer>
+                            {added ? (
+                              <>
+                                <Check size={16} /> Added
+                              </>
+                            ) : (
+                              <>
+                                <Plus size={16} /> Add scheme
+                              </>
+                            )}
+                          </footer>
+                        </button>
+                        <button
+                          disabled={busy}
+                          className={
+                            'star ' +
+                            (data.favourites.includes(s.id) ? 'starred' : '')
+                          }
+                          aria-label={
+                            (data.favourites.includes(s.id)
+                              ? 'Unfavourite '
+                              : 'Favourite ') + s.name
+                          }
+                          onClick={() => star(s.id)}
+                        >
+                          <Star
+                            size={17}
+                            fill={
+                              data.favourites.includes(s.id)
+                                ? 'currentColor'
+                                : 'none'
+                            }
+                          />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+                {!shown.length && (
+                  <div className="empty">
+                    <Search size={28} />
+                    <h3>
+                      {tab === 'favourites'
+                        ? 'Your favourite schemes belong here'
+                        : 'No schemes found'}
+                    </h3>
+                    <p>
+                      {tab === 'favourites'
+                        ? 'Tap a star on any scheme to save it here.'
+                        : 'Try another search or filter.'}
+                    </p>
+                    <button
+                      className="secondary"
+                      onClick={() => {
+                        setQuery('');
+                        setFilter('All');
+                        setTab('all');
+                      }}
+                    >
+                      Show all schemes
+                    </button>
+                  </div>
+                )}
+                <div className="catalogfoot">
+                  <span className="sampledot" /> Scheme master · 14 Sep 2026 ·
+                  Sample clients
+                  {browserEdition() && ' · Data saved in this browser'}
+                </div>
+              </div>
+            </div>
+          </section>
+          <aside className="cart desktopcart">{Cart()}</aside>
+        </AllocationSplit>
+        <footer className="pagefoot">
+          <span>PUROHIT ASSOCIATES LLP</span>
+          <span>Investing with integrity.</span>
+          <span>Allocation workspace · ARN 110015</span>
+        </footer>
+      </div>
+      <div className="mobilesticky">
+        <span>
+          <b>{lines.length} schemes</b>
+          <small>Allocated {money(allocated)}</small>
+        </span>
+        <span className={remaining < 0 ? 'red' : ''}>
+          <small>{remaining < 0 ? 'Over allocated' : 'Remaining'}</small>
+          <b>{money(Math.abs(remaining))}</b>
+        </span>
+        <button className="primary" onClick={() => setDrawer(true)}>
+          View cart <ShoppingBasket size={18} />
+        </button>
+      </div>
+      <Sheet open={drawer} onOpenChange={setDrawer}>
+        <SheetContent className="cartdrawer">
+          <SheetTitle className="sr-only">Allocation cart</SheetTitle>
+          <div className="cart">{Cart()}</div>
+        </SheetContent>
+      </Sheet>
+      <Dialog
+        open={!!panel}
+        onOpenChange={(open) => {
+          if (!open) setPanel(null);
+        }}
+      >
+        <DialogContent
+          className={
+            'appdialog ' +
+            (panel === 'record'
+              ? 'recorddialog'
+              : panel === 'portfolio'
+                ? 'portfoliodialog'
+                : '')
+          }
+        >
+          <DialogTitle>
+            {
+              (
+                {
+                  drafts: 'Saved drafts',
+                  history: 'Allocation history',
+                  baskets: 'Allocation baskets',
+                  admin: 'Admin / Data',
+                  portfolio: 'Existing portfolio',
+                  newclient: 'New client',
+                  clients: 'Client list',
+                  schemes: 'Scheme list',
+                  record:
+                    view?.status === 'final'
+                      ? 'Allocation confirmed'
+                      : 'Allocation draft',
+                } as any
+              )[panel || '']
+            }
+          </DialogTitle>
+          <DialogDescription>
+            {
+              (
+                {
+                  drafts: 'Pick up where you left off.',
+                  history: 'View and print finalised allocations.',
+                  baskets:
+                    'Apply a saved mix to the current investment amount.',
+                  admin:
+                    'Import approved client and scheme masters. IDs must be unique.',
+                  portfolio:
+                    'Review existing holdings and reuse folios for new investments.',
+                  newclient:
+                    'Create a client and start allocating immediately.',
+                  clients: 'Search, select, edit or delete clients.',
+                  schemes: 'Search, select, edit or delete schemes.',
+                  record: 'Purohit Associates LLP · ARN 110015',
+                } as any
+              )[panel || '']
+            }
+          </DialogDescription>
+          {(panel === 'drafts' || panel === 'history') && (
+            <>
+              <div className="searchfield">
+                <Search size={18} />
+                <input
+                  placeholder="Search client, Iwell ID, date or scheme…"
+                  aria-label="Search allocation history"
+                  value={historyQuery}
+                  onChange={(e) => setHistoryQuery(e.target.value)}
+                />
+              </div>
+              {panel === 'drafts' && visibleRecords.length > 0 && (
+                <div className="drafttoolbar">
+                  <label>
+                    <input
+                      type="checkbox"
+                      aria-label="Select all visible drafts"
+                      checked={visibleRecords.every((record) =>
+                        draftSelection.includes(record.id),
+                      )}
+                      onChange={(event) =>
+                        setDraftSelection((selected) =>
+                          event.target.checked
+                            ? [
+                                ...new Set([
+                                  ...selected,
+                                  ...visibleRecords.map((record) => record.id),
+                                ]),
+                              ]
+                            : selected.filter(
+                                (id) =>
+                                  !visibleRecords.some((record) => record.id === id),
+                              ),
+                        )
+                      }
+                    />
+                    Select all shown
+                  </label>
+                  <span>{draftSelection.length} selected</span>
+                  <button
+                    className="primary"
+                    disabled={!draftSelection.length || busy}
+                    onClick={() =>
+                      work(async () => {
+                        const selected = data.records.filter(
+                          (record) =>
+                            record.status === 'draft' &&
+                            draftSelection.includes(record.id),
+                        );
+                        await exportWorkbook(
+                          selected,
+                          `allocation-drafts-${new Date().toISOString().slice(0, 10)}.xlsx`,
+                        );
+                        setNotice(
+                          `${selected.length} drafts downloaded in one Excel workbook.`,
+                        );
+                      })
+                    }
+                  >
+                    <Download size={16} /> Download selected Excel
+                  </button>
+                </div>
+              )}
+              <div className="recordlist">
+                {visibleRecords.map((r) => (
+                    <article key={r.id}>
+                      {r.status === 'draft' && (
+                        <input
+                          className="draftcheck"
+                          type="checkbox"
+                          aria-label={'Select draft for ' + r.client.name}
+                          checked={draftSelection.includes(r.id)}
+                          onChange={() =>
+                            setDraftSelection((selected) =>
+                              selected.includes(r.id)
+                                ? selected.filter((id) => id !== r.id)
+                                : [...selected, r.id],
+                            )
+                          }
+                        />
+                      )}
+                      <div>
+                        <b>{r.client.name}</b>
+                        <small>
+                          {r.client.id} ·{' '}
+                          {new Date(r.date).toLocaleString('en-IN')}
+                        </small>
+                        <span>{r.lines.length} schemes</span>
+                      </div>
+                      <b>{money(r.total)}</b>
+                      {r.status === 'draft' ? (
+                        <>
+                          <button
+                            className="secondary"
+                            onClick={() => loadDraft(r)}
+                          >
+                            Resume
+                          </button>
+                          <button
+                            className="iconbtn"
+                            aria-label="Delete draft"
+                            onClick={() =>
+                              setConfirm({
+                                title: 'Delete this draft?',
+                                description:
+                                  'This saved draft will be permanently removed.',
+                                run: () => {
+                                  work(async () => {
+                                    await api({
+                                      action: 'deleteDraft',
+                                      id: r.id,
+                                    });
+                                    await refresh();
+                                  });
+                                },
+                              })
+                            }
+                          >
+                            <X size={17} />
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          className="secondary"
+                          onClick={() => {
+                            setView(r);
+                            setPanel('record');
+                          }}
+                        >
+                          View <ChevronRight size={17} />
+                        </button>
+                      )}
+                    </article>
+                  ))}
+                {!visibleRecords.length && (
+                  <div className="empty">
+                    <FolderOpen size={30} />
+                    <h3>No allocations to show</h3>
+                    <p>
+                      {historyQuery
+                        ? 'Try a different search.'
+                        : 'Your saved allocations will appear here.'}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+          {panel === 'baskets' && (
+            <>
+              <div className="basketlist">
+                {data.baskets.map((b) => (
+                  <button key={b.id} onClick={() => applyBasket(b)}>
+                    <Layers3 size={23} />
+                    <div>
+                      <b>{b.name}</b>
+                      <small>
+                        {b.items.length} schemes ·{' '}
+                        {b.items.map((x) => x.pct + '%').join(' / ')}
+                      </small>
+                    </div>
+                    <ArrowRight size={18} />
+                  </button>
+                ))}
+              </div>
+              <section className="savebasket">
+                <h3>Save the current mix as a basket</h3>
+                <p>
+                  Fully allocate your investment before saving a reusable mix.
+                </p>
+                <input
+                  aria-label="Basket name"
+                  placeholder="e.g. Multi Asset Allocation"
+                  value={basketName}
+                  onChange={(e) => setBasketName(e.target.value)}
+                />
+                <button
+                  className="primary"
+                  disabled={!complete || !basketName.trim() || busy}
+                  onClick={() =>
+                    work(async () => {
+                      await api({
+                        action: 'basket',
+                        basket: {
+                          id: crypto.randomUUID(),
+                          name: basketName.trim(),
+                          items: lines.map((l) => ({
+                            id: l.scheme.id,
+                            pct: (l.amount / total) * 100,
+                          })),
+                        },
+                      });
+                      setBasketName('');
+                      await refresh();
+                      setNotice('Allocation basket saved.');
+                    })
+                  }
+                >
+                  Save basket
+                </button>
+              </section>
+            </>
+          )}
+          {panel === 'newclient' && (
+            <NewClient
+              clients={data.clients}
+              onSave={async (c) => {
+                await api({ action: 'import', kind: 'clients', rows: [c] });
+                await refresh();
+                selectClient(c);
+                setPanel(null);
+                setNotice('New client created and selected.');
+              }}
+            />
+          )}
+          {panel === 'portfolio' && client && (
+            <PortfolioManager
+              key={client.id}
+              client={client}
+              portfolio={portfolio}
+              schemes={data.schemes}
+              onAdd={addHolding}
+              onSave={async (p) => {
+                await api({ action: 'portfolio', portfolio: p });
+                await refresh();
+              }}
+            />
+          )}
+          {(panel === 'clients' || panel === 'schemes') && (
+            <MasterManager
+              key={panel}
+              kind={panel}
+              rows={data[panel]}
+              onSave={async (p) => {
+                await api(p);
+                await refresh();
+                if (p.kind === 'clients')
+                  setClient((c) =>
+                    !c
+                      ? null
+                      : p.action === 'deleteMaster'
+                        ? p.ids.includes(c.id)
+                          ? null
+                          : c
+                        : c.id === p.id
+                          ? {
+                              ...p.record,
+                              id: p.record.id.trim(),
+                              name: p.record.name.trim(),
+                            }
+                          : c,
+                  );
+                else
+                  setLines((ls) =>
+                    ls.flatMap((l) =>
+                      p.action === 'deleteMaster'
+                        ? p.ids.includes(l.scheme.id)
+                          ? []
+                          : [l]
+                        : l.scheme.id === p.id
+                          ? p.record.active
+                            ? [
+                                {
+                                  ...l,
+                                  scheme: {
+                                    ...p.record,
+                                    id: p.record.id.trim(),
+                                  },
+                                },
+                              ]
+                            : []
+                          : [l],
+                    ),
+                  );
+                setNotice(
+                  p.action === 'deleteMaster'
+                    ? 'Selected records deleted.'
+                    : 'Details updated.',
+                );
+              }}
+            />
+          )}
+          {panel === 'admin' && (
+            <>
+              <Tabs
+                value={importKind}
+                onValueChange={(v) => {
+                  setImportKind(String(v));
+                  setImportRows([]);
+                  setFileName('');
+                  setImportError('');
+                }}
+              >
+                <TabsList className="navtabs">
+                  <TabsTrigger value="clients">Client master</TabsTrigger>
+                  <TabsTrigger value="schemes">Scheme master</TabsTrigger>
+                </TabsList>
+              </Tabs>
+              <div className="importstats">
+                <b>
+                  {importKind === 'clients'
+                    ? data.clients.length
+                    : data.schemes.length}
+                </b>{' '}
+                existing {importKind}{' '}
+                <span>New IDs are added; existing records are preserved.</span>
+              </div>
+              <button
+                className="secondary"
+                onClick={() =>
+                  download(
+                    importKind + '-template.csv',
+                    csv([
+                      importKind === 'clients'
+                        ? ['Iwell ID', 'Client Name']
+                        : [
+                            'Scheme ID',
+                            'Official Scheme Name',
+                            'Display Name',
+                            'AMC',
+                            'Category',
+                            'Plan',
+                            'Option',
+                            'Active / Inactive',
+                          ],
+                    ]),
+                  )
+                }
+              >
+                <Download size={17} /> Download CSV template
+              </button>
+              <label className="upload">
+                <Database size={28} />
+                <b>Choose an Excel or CSV file</b>
+                <span>.xlsx or .csv · Up to 20 MB / 20,000 rows</span>
+                <input
+                  key={importKind}
+                  type="file"
+                  accept=".csv,.xlsx"
+                  onChange={(e) => {
+                    if (e.target.files?.[0]) importFile(e.target.files[0]);
+                  }}
+                />
+              </label>
+              {importError && (
+                <p className="red" role="alert">
+                  {importError}
+                </p>
+              )}
+              {importRows.length > 0 && (
+                <>
+                  <p>
+                    <b>{fileName}</b> · {importRows.length} valid rows
+                  </p>
+                  <div className="importpreview">
+                    {importRows.slice(0, 5).map((r) => (
+                      <p key={r.id}>
+                        <b>{r.id}</b> {r.name}
+                      </p>
+                    ))}
+                  </div>
+                  <button
+                    className="primary"
+                    disabled={busy || !loaded}
+                    onClick={() =>
+                      work(async () => {
+                        await api({
+                          action: 'import',
+                          kind: importKind,
+                          rows: importRows,
+                        });
+                        setImportRows([]);
+                        setFileName('');
+                        await refresh();
+                        setNotice('Master data imported successfully.');
+                      })
+                    }
+                  >
+                    Import {importRows.length} {importKind}
+                  </button>
+                </>
+              )}
+              <p className="hint">
+                Scheme master loaded from Top Schemes, 14 Sep 2026. Scheme names
+                are preserved as supplied; client records remain sample data.
+              </p>
+            </>
+          )}
+          {panel === 'record' && view && (
+            <>
+              <div className="confirmation">
+                <CheckCircle2 size={28} />
+                <div>
+                  <h3>{view.client.name}</h3>
+                  <p>
+                    {view.client.id} ·{' '}
+                    {new Date(view.date).toLocaleString('en-IN', {
+                      timeZone: 'Asia/Kolkata',
+                    })}{' '}
+                    IST
+                  </p>
+                </div>
+                <b>{money(view.total)}</b>
+              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Official scheme name</TableHead>
+                    <TableHead>Folio</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead>%</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {view.lines.map((l) => (
+                    <TableRow key={l.scheme.id}>
+                      <TableCell>
+                        <b>{l.scheme.official}</b>
+                        <small className="tablemeta">
+                          {l.scheme.amc} · {l.scheme.category}
+                        </small>
+                      </TableCell>
+                      <TableCell>{l.folio || ''}</TableCell>
+                      <TableCell>{money(l.amount)}</TableCell>
+                      <TableCell>
+                        {((l.amount / view.total) * 100).toFixed(2)}%
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+              <div className="recordactions">
+                <button
+                  className="secondary"
+                  onClick={() => printAllocation(view)}
+                >
+                  <Printer size={17} />
+                  Print
+                </button>
+                <button
+                  className="secondary"
+                  onClick={() =>
+                    download(
+                      'allocation-' +
+                        view.client.id +
+                        '-' +
+                        view.date.slice(0, 10) +
+                        '.csv',
+                      csv(recordRows(view)),
+                    )
+                  }
+                >
+                  <Download size={17} />
+                  Export CSV
+                </button>
+                <button
+                  className="secondary"
+                  onClick={() =>
+                    exportWorkbook(
+                      [view],
+                      `allocation-${view.client.id}-${view.date.slice(0, 10)}.xlsx`,
+                    )
+                  }
+                >
+                  <Download size={17} />
+                  Export Excel
+                </button>
+                <button
+                  className="secondary"
+                  onClick={() =>
+                    work(async () => {
+                      await navigator.clipboard.writeText(
+                        recordRows(view)
+                          .map((r) => r.join('\t'))
+                          .join('\n'),
+                      );
+                      setNotice('Allocation copied.');
+                    })
+                  }
+                >
+                  <Copy size={17} />
+                  Copy
+                </button>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+      <AlertDialog
+        open={!!confirm}
+        onOpenChange={(v) => {
+          if (!v) setConfirm(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogTitle>{confirm?.title}</AlertDialogTitle>
+          <AlertDialogDescription>
+            {confirm?.description}
+          </AlertDialogDescription>
+          <div className="confirmbuttons">
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <button
+              className="primary"
+              onClick={() => {
+                const run = confirm?.run;
+                setConfirm(null);
+                run?.();
+              }}
+            >
+              Continue
+            </button>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
+      {notice && (
+        <div className="toast" role="status">
+          <CheckCircle2 size={18} />
+          {notice}
+          <button
+            aria-label="Dismiss notification"
+            onClick={() => setNotice('')}
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
+    </main>
+  );
+}
