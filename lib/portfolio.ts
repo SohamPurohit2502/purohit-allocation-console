@@ -29,7 +29,9 @@ export function parsePortfolioPages(pages:PdfPage[],schemes:Scheme[]){
   const names=its.filter(i=>i.x<leftEdge&&i.y>header.y+12&&i.y<page.height-24);
   let buffer:PdfItem[]=[];
   for(const item of names){
-   if(/^(Grand Total|.* Total\s*:|Equity$|Hybrid$|Liquid and Ultra Short$|.*PAN\s*:|Disclaimer)/i.test(item.text)){buffer=[];continue}
+   const label=item.text.trim();
+   const section=/^(Equity|Hybrid|Debt|Other|Liquid and Ultra Short|Arbitrage|International|Gold|Commodity|Fixed Income|Tax Saving|ELSS|Solution Oriented|Index(?: Funds?)?|Fund of Funds|FoF)$/i.test(label);
+   if(section||/^(Grand Total|.* Total\s*:|.*PAN\s*:|Disclaimer)/i.test(label)){buffer=[];continue}
    buffer.push(item);
    const end=wealth?/^ARN-/.test(item.text):item.text.trim().endsWith(']');if(!end)continue;
    const text=buffer.map(i=>i.text).join(' ');const m=wealth?text.match(/^(.*?)\s+(\d[\d/\s-]{3,})\s+ARN-/):text.match(/^(.*?)\s*\[([^\]]+)\]$/);
