@@ -544,6 +544,14 @@ export default function Home() {
         historyQuery,
       ),
   );
+  const visibleActionDrafts = (data.portfolioActions || []).filter(
+    (batch) =>
+      batch.status === 'draft' &&
+      matches(
+        `${batch.client.name} ${batch.client.id} ${batch.updatedAt} ${batch.instructions.map((instruction) => `${instruction.kind} ${instruction.sourceScheme?.official || ''} ${instruction.targetScheme?.official || ''} ${instruction.folio}`).join(' ')}`,
+        historyQuery,
+      ),
+  );
   async function exportWorkbook(records: Allocation[], name: string) {
     const { downloadAllocationsXlsx } = await import('@/lib/export-xlsx');
     downloadAllocationsXlsx(records, name);
@@ -929,7 +937,12 @@ export default function Home() {
             <button onClick={() => setPanel('drafts')}>
               <FolderOpen size={17} />
               <span>Drafts</span>
-              <em>{data.records.filter((r) => r.status === 'draft').length}</em>
+              <em>
+                {data.records.filter((r) => r.status === 'draft').length +
+                  (data.portfolioActions || []).filter(
+                    (batch) => batch.status === 'draft',
+                  ).length}
+              </em>
             </button>
             <button onClick={() => setPanel('history')}>
               <History size={17} />
@@ -1453,6 +1466,9 @@ export default function Home() {
                 </div>
               )}
               <div className="recordlist">
+                {panel === 'drafts' && visibleRecords.length > 0 && (
+                  <h3 className="draftsectiontitle">Investment allocation drafts</h3>
+                )}
                 {visibleRecords.map((r) => (
                     <article key={r.id}>
                       {r.status === 'draft' && (
@@ -1523,14 +1539,58 @@ export default function Home() {
                       )}
                     </article>
                   ))}
-                {!visibleRecords.length && (
+                {panel === 'drafts' && visibleActionDrafts.length > 0 && (
+                  <>
+                    <h3 className="draftsectiontitle">Portfolio action drafts</h3>
+                    {visibleActionDrafts.map((batch) => (
+                      <article key={batch.id} className="actiondraftrow">
+                        <ArrowRightLeft size={20} />
+                        <div>
+                          <b>{batch.client.name}</b>
+                          <small>
+                            {batch.client.id} ·{' '}
+                            {new Date(batch.updatedAt).toLocaleString('en-IN')}
+                          </small>
+                          <span>
+                            {batch.instructions.length} instruction
+                            {batch.instructions.length === 1 ? '' : 's'} ·{' '}
+                            {[...new Set(batch.instructions.map((instruction) =>
+                              instruction.kind === 'sip-start'
+                                ? 'SIP start'
+                                : instruction.kind === 'sip-stop'
+                                  ? 'SIP stop'
+                                  : instruction.kind,
+                            ))].join(', ')}
+                          </span>
+                        </div>
+                        <button
+                          className="secondary"
+                          onClick={() => {
+                            selectClient(batch.client);
+                            setPanel('actions');
+                          }}
+                        >
+                          Open <ChevronRight size={17} />
+                        </button>
+                      </article>
+                    ))}
+                  </>
+                )}
+                {!visibleRecords.length &&
+                  (panel === 'history' || !visibleActionDrafts.length) && (
                   <div className="empty">
                     <FolderOpen size={30} />
-                    <h3>No allocations to show</h3>
+                    <h3>
+                      {panel === 'history'
+                        ? 'No allocations to show'
+                        : 'No drafts to show'}
+                    </h3>
                     <p>
                       {historyQuery
                         ? 'Try a different search.'
-                        : 'Your saved allocations will appear here.'}
+                        : panel === 'history'
+                          ? 'Your finalised allocations will appear here.'
+                          : 'Your saved drafts will appear here.'}
                     </p>
                   </div>
                 )}
