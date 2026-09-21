@@ -1,0 +1,7 @@
+'use client';
+import {useState} from 'react';
+import type {Client} from '@/lib/domain';
+export function NewClient({clients,onSave}:{clients:Client[];onSave:(c:Client)=>Promise<void>}){
+ const [name,setName]=useState(''),[id,setId]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
+ return <form className="newclient" onSubmit={async e=>{e.preventDefault();setError('');setBusy(true);try{const c={id:id.trim()||'NEW-'+crypto.randomUUID().slice(0,8).toUpperCase(),name:name.trim()};if(!c.name)throw Error('Enter the client name.');if(clients.some(x=>x.id===c.id))throw Error('This client ID already exists.');await onSave(c)}catch(e){setError((e as Error).message)}finally{setBusy(false)}}}><label>Client name<input required autoFocus value={name} onChange={e=>setName(e.target.value)}/></label><label>Iwell / client ID (optional)<input value={id} onChange={e=>setId(e.target.value)} placeholder="A temporary ID will be created if blank"/></label><p className="hint">The client will be saved to your client list. You can update the ID and name later from Clients.</p>{name.trim()&&clients.some(c=>c.name.toLowerCase()===name.trim().toLowerCase())&&<p className="red">A client with this name already exists. Check the client list before creating another record.</p>}{error&&<p className="red" role="alert">{error}</p>}<button className="primary" disabled={busy}>{busy?'Saving…':'Create and select client'}</button></form>
+}

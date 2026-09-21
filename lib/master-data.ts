@@ -8,6 +8,8 @@ export function updateMaster(d:any,p:any){
     if(rows.some((x:any)=>x.id===next.id&&x.id!==p.id))throw Error('This ID already exists.');
     if(p.kind==='schemes'){if(typeof p.record.active!=='boolean')throw Error('Choose a scheme status.');next.active=p.record.active;}
     d[p.kind]=rows.map((x:any)=>x.id===p.id?next:x);
+    if(p.kind==='clients')for(const list of ['portfolios','portfolioHistory'])d[list]=(d[list]||[]).map((x:any)=>x.clientId===p.id?{...x,clientId:next.id}:x);
+    if(p.kind==='schemes')d.portfolios=(d.portfolios||[]).map((x:any)=>({...x,holdings:x.holdings.map((h:any)=>h.schemeId===p.id?{...h,schemeId:next.id,amc:next.amc}:h)}));
     if(p.kind==='schemes'){
       for(const key of ['favourites','recent'])d[key]=d[key].map((id:string)=>id===p.id?next.id:id);
       d.baskets=d.baskets.map((b:any)=>({...b,items:b.items.map((i:any)=>i.id===p.id?{...i,id:next.id}:i)}));
@@ -15,6 +17,8 @@ export function updateMaster(d:any,p:any){
   }else if(p.action==='deleteMaster'){
     if(!Array.isArray(p.ids)||!p.ids.length||p.ids.some((id:any)=>typeof id!=='string'))throw Error('Select records to delete.');
     const ids=new Set(p.ids);d[p.kind]=rows.filter((x:any)=>!ids.has(x.id));
+    if(p.kind==='clients')for(const list of ['portfolios','portfolioHistory'])d[list]=(d[list]||[]).filter((x:any)=>!ids.has(x.clientId));
+    if(p.kind==='schemes')d.portfolios=(d.portfolios||[]).map((x:any)=>({...x,holdings:x.holdings.map((h:any)=>ids.has(h.schemeId)?{...h,schemeId:''}:h)}));
     if(p.kind==='schemes')for(const key of ['favourites','recent'])d[key]=d[key].filter((id:string)=>!ids.has(id));
   }else throw Error('Invalid master action.');
 }
