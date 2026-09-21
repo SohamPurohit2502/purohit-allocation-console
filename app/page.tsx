@@ -331,19 +331,35 @@ export default function Home() {
     amcTotals.set(holding.amc, (amcTotals.get(holding.amc) || 0) + holding.value),
   );
   const folioDefaults = (
-    _scheme?: Scheme,
-    _client?: Client | null,
-  ): Pick<Line, 'folio'> => ({ folio: '' });
+    scheme?: Scheme,
+    selectedClient: Client | null = client,
+  ): Pick<Line, 'folio'> => {
+    if (!scheme || !selectedClient) return { folio: '' };
+    const savedPortfolio = data.portfolios?.find(
+      (item) => item.clientId === selectedClient.id,
+    );
+    const existingHolding = savedPortfolio?.holdings.find(
+      (holding) => holding.schemeId === scheme.id && holding.folio.trim(),
+    );
+    return { folio: existingHolding?.folio.trim() || '' };
+  };
   function selectClient(c: Client | null) {
     setClient(c);
     setDraftId(null);
     setLines((ls) => ls.map((l) => ({ ...l, ...folioDefaults(l.scheme, c) })));
   }
-  function addHolding(s: Scheme, _folio: string) {
+  function addHolding(s: Scheme, folio: string) {
     setLines((ls) =>
       ls.some((l) => l.scheme.id === s.id)
         ? ls
-        : [...ls, { scheme: s, amount: 0, folio: '' }],
+        : [
+            ...ls,
+            {
+              scheme: s,
+              amount: 0,
+              folio: folio.trim() || folioDefaults(s).folio,
+            },
+          ],
     );
     setNotice('Added to the new-investment cart.');
   }
