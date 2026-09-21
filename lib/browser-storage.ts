@@ -62,11 +62,20 @@ export async function localData(payload?: any): Promise<any> {
       try {
         const d: any = r.result || seed();
         d.portfolios ??= [];
+        d.portfolioActions ??= [];
         if (payload) {
           const p = payload;
           switch (p.action) {
             case 'portfolio':
               output = savePortfolio(d, p.portfolio);
+              break;
+            case 'portfolioActionBatch':
+              if (!p.batch?.id || !p.batch?.client?.id || !Array.isArray(p.batch.instructions) || !p.batch.instructions.length)
+                throw Error('Add at least one valid portfolio instruction.');
+              if (!d.clients.some((x: any) => x.id === p.batch.client.id))
+                throw Error('Client no longer exists.');
+              d.portfolioActions = [p.batch, ...d.portfolioActions.filter((x: any) => x.id !== p.batch.id)];
+              output = p.batch;
               break;
             case 'editMaster':
             case 'deleteMaster':

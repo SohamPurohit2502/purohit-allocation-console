@@ -6,6 +6,8 @@ import { type Portfolio } from '@/lib/portfolio';
 import { printAllocation } from '@/lib/print-allocation';
 import { MasterManager } from '@/components/master-manager';
 import { AllocationSplit } from '@/components/allocation-split';
+import { PortfolioActions } from '@/components/portfolio-actions';
+import type { PortfolioActionBatch } from '@/lib/portfolio-actions';
 import uploadedSchemes from '@/lib/uploaded-schemes.json';
 import { browserEdition, localData } from '@/lib/browser-storage';
 import {
@@ -34,6 +36,7 @@ import {
   ChevronRight,
   CheckCircle2,
   AlertCircle,
+  ArrowRightLeft,
 } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -89,6 +92,7 @@ type Data = {
   baskets: Basket[];
   favourites: string[];
   recent: string[];
+  portfolioActions?: PortfolioActionBatch[];
 };
 const initial: Data = {
   clients: sampleClients,
@@ -97,6 +101,7 @@ const initial: Data = {
   baskets: sampleBaskets,
   favourites: [],
   recent: [],
+  portfolioActions: [],
 };
 async function api(payload: unknown) {
   if (browserEdition()) return localData(payload);
@@ -930,6 +935,11 @@ export default function Home() {
               <History size={17} />
               <span>History</span>
             </button>
+            <button onClick={() => setPanel('actions')}>
+              <ArrowRightLeft size={17} />
+              <span>Portfolio Actions</span>
+              <em>{(data.portfolioActions || []).filter((b) => b.status === 'draft').length}</em>
+            </button>
             <button onClick={() => setPanel('clients')}>
               <UserRound size={17} />
               <span>Clients</span>
@@ -1313,6 +1323,8 @@ export default function Home() {
               ? 'recorddialog'
               : panel === 'portfolio'
                 ? 'portfoliodialog'
+                : panel === 'actions'
+                  ? 'portfoliodialog'
                 : '')
           }
         >
@@ -1325,6 +1337,7 @@ export default function Home() {
                   baskets: 'Allocation baskets',
                   admin: 'Admin / Data',
                   portfolio: 'Existing portfolio',
+                  actions: 'Portfolio actions',
                   newclient: 'New client',
                   clients: 'Client list',
                   schemes: 'Scheme list',
@@ -1348,6 +1361,8 @@ export default function Home() {
                     'Import approved client and scheme masters. IDs must be unique.',
                   portfolio:
                     'Review existing holdings and reuse folios for new investments.',
+                  actions:
+                    'Prepare redemption, switch and SIP instructions from existing holdings.',
                   newclient:
                     'Create a client and start allocating immediately.',
                   clients: 'Search, select, edit or delete clients.',
@@ -1585,6 +1600,24 @@ export default function Home() {
               }}
             />
           )}
+          {panel === 'actions' && client && (
+            <PortfolioActions
+              client={client}
+              portfolio={portfolio}
+              schemes={data.schemes}
+              batches={data.portfolioActions || []}
+              onSave={async (batch) => {
+                await api({ action: 'portfolioActionBatch', batch });
+                await refresh();
+              }}
+            />
+          )}
+          {panel === 'actions' && !client && (
+            <div className="actionempty">
+              <h3>Select a client first</h3>
+              <p>Close this window and select the client whose portfolio you want to change.</p>
+            </div>
+          )}
           {(panel === 'clients' || panel === 'schemes') && (
             <MasterManager
               key={panel}
@@ -1724,7 +1757,7 @@ export default function Home() {
                     className="primary"
                     disabled={busy || !loaded}
                     onClick={() => {
-                      const kind = importKind;
+                      const kind = importKind as 'clients' | 'schemes';
                       const rows = importRows;
                       setConfirm({
                         title: `Replace the ${kind === 'clients' ? 'client' : 'scheme'} master?`,
