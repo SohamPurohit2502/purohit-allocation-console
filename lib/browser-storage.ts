@@ -147,7 +147,7 @@ export async function localData(payload?: any): Promise<any> {
                 p.rows.length > 20000
               )
                 throw Error('Invalid import');
-              const ids = new Set(d[p.kind].map((x: any) => x.id));
+              const ids = new Set<string>();
               for (const x of p.rows) {
                 if (!x.id || !x.name || ids.has(x.id))
                   throw Error('Missing or duplicate ID: ' + x.id);
@@ -158,7 +158,41 @@ export async function localData(payload?: any): Promise<any> {
                   throw Error('Missing scheme fields');
                 ids.add(x.id);
               }
-              d[p.kind].push(...p.rows);
+              if (p.replace) {
+                d[p.kind] = structuredClone(p.rows);
+                if (p.kind === 'clients') {
+                  for (const list of ['portfolios', 'portfolioHistory'])
+                    d[list] = (d[list] || []).filter((x: any) =>
+                      ids.has(x.clientId),
+                    );
+                } else {
+                  const schemes = new Map(
+                    p.rows.map((x: any) => [x.id, x] as const),
+                  );
+                  d.portfolios = (d.portfolios || []).map((portfolio: any) => ({
+                    ...portfolio,
+                    holdings: portfolio.holdings.map((holding: any) => {
+                      const scheme: any = schemes.get(holding.schemeId);
+                      return scheme
+                        ? { ...holding, amc: scheme.amc }
+                        : { ...holding, schemeId: '' };
+                    }),
+                  }));
+                  for (const key of ['favourites', 'recent'])
+                    d[key] = d[key].filter((id: string) => ids.has(id));
+                  d.baskets = d.baskets
+                    .map((basket: any) => ({
+                      ...basket,
+                      items: basket.items.filter((item: any) => ids.has(item.id)),
+                    }))
+                    .filter((basket: any) => basket.items.length);
+                }
+              } else {
+                const existing = new Set(d[p.kind].map((x: any) => x.id));
+                if (p.rows.some((x: any) => existing.has(x.id)))
+                  throw Error('An imported ID already exists.');
+                d[p.kind].push(...p.rows);
+              }
               output = { count: p.rows.length };
               break;
             }

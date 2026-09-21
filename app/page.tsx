@@ -584,11 +584,6 @@ export default function Home() {
         if (!heads.includes(h.toLowerCase()))
           throw Error('Missing column: ' + h);
       const ids = new Set();
-      const existing = new Set(
-        (importKind === 'clients' ? data.clients : data.schemes).map(
-          (x) => x.id,
-        ),
-      );
       const parsed = rows
         .slice(1)
         .filter((r) => r.some((x) => x !== null && String(x).trim()))
@@ -603,8 +598,8 @@ export default function Home() {
           );
           if (!id || !name)
             throw Error(`Row ${i + 2}: ID and name are required.`);
-          if (ids.has(id) || existing.has(id))
-            throw Error(`Row ${i + 2}: duplicate or existing ID ${id}.`);
+          if (ids.has(id))
+            throw Error(`Row ${i + 2}: duplicate ID ${id}.`);
           ids.add(id);
           if (importKind === 'clients') return { id, name };
           const official = get(r, 'Official Scheme Name'),
@@ -1667,7 +1662,9 @@ export default function Home() {
                     : data.schemes.length}
                 </b>{' '}
                 existing {importKind}{' '}
-                <span>New IDs are added; existing records are preserved.</span>
+                <span>
+                  Uploading a master file replaces all existing {importKind}.
+                </span>
               </div>
               <button
                 className="secondary"
@@ -1726,21 +1723,34 @@ export default function Home() {
                   <button
                     className="primary"
                     disabled={busy || !loaded}
-                    onClick={() =>
-                      work(async () => {
-                        await api({
-                          action: 'import',
-                          kind: importKind,
-                          rows: importRows,
-                        });
-                        setImportRows([]);
-                        setFileName('');
-                        await refresh();
-                        setNotice('Master data imported successfully.');
-                      })
-                    }
+                    onClick={() => {
+                      const kind = importKind;
+                      const rows = importRows;
+                      setConfirm({
+                        title: `Replace the ${kind === 'clients' ? 'client' : 'scheme'} master?`,
+                        description: `All ${data[kind].length.toLocaleString('en-IN')} existing ${kind} will be deleted first and replaced by the ${rows.length.toLocaleString('en-IN')} records in ${fileName}.`,
+                        run: () =>
+                          work(async () => {
+                            await api({
+                              action: 'import',
+                              kind,
+                              rows,
+                              replace: true,
+                            });
+                            setImportRows([]);
+                            setFileName('');
+                            if (kind === 'clients') setClient(null);
+                            else setLines([]);
+                            setDraftId(null);
+                            await refresh();
+                            setNotice(
+                              `${kind === 'clients' ? 'Client' : 'Scheme'} master replaced successfully.`,
+                            );
+                          }),
+                      });
+                    }}
                   >
-                    Import {importRows.length} {importKind}
+                    Replace with {importRows.length} {importKind}
                   </button>
                 </>
               )}
