@@ -1,6 +1,6 @@
 # Office backend extension
 
-This is a prepared extension for the existing `purohit-datasheets` Cloudflare Pages project. It is not included in the public GitHub Pages bundle. It has not been deployed yet.
+This is a prepared extension for the existing `purohit-datasheets` Cloudflare Pages project. It is not included in the public GitHub Pages bundle. Deployed 27 October 2026 as Cloudflare deployment `4ae2c11e-d712-4405-8020-de3a59410170`. Production preflight returned 204 and unauthorized POST returned 401. Authenticated Drive and AI calls still require the office code for end-to-end verification.
 
 1. Copy `portfolio-api.mjs` beside that project's `server/worker.mjs` and `server/legacy-worker.mjs`.
 2. Add `import {portfolioAPI} from './portfolio-api.mjs';` to `server/worker.mjs`.

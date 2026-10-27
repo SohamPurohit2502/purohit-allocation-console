@@ -30,9 +30,9 @@ Category and AMC previews use the master. Sector preview requires a validated CS
 
 New plans are persisted in the existing IndexedDB database under a separate `deskPlans` field. Finals are immutable, and reopening a final creates a new editable plan. Multi-select exports produce styled XLSX, grouped into one sheet per investor with safe unique sheet names; folios are text. Exports include action, destination scheme, destination folio, SIP date and frequency as well as source holdings. These records are proposed instructions, not transaction executions.
 
-### Office services: prepared, activation pending
+### Office services: deployed 27 October 2026
 
-`backend/portfolio-api.mjs` extends the existing purohit-datasheets server and reuses its server-side Drive and Gemini/Groq credentials. See backend/README.md. It is NOT yet deployed. The public UI reports connection failures and saves locally; it never claims a successful cloud save without a server response. The office access code is kept only in memory. No API keys or customer data are included in public assets. Drive saves versioned JSON and Excel copies in a separate Purohit Portfolio Plans folder. The AI assistant is read-only, uses optional anonymous portfolio context, does not have live market retrieval, and falls back from Gemini to Groq on service failures.
+`backend/portfolio-api.mjs` extends the existing purohit-datasheets server and reuses its server-side Drive and Gemini/Groq credentials. See backend/README.md. The extension is deployed at `https://purohit-datasheets.pages.dev/.netlify/functions/portfolio`. Cloudflare deployment: `4ae2c11e-d712-4405-8020-de3a59410170`. Preflight and unauthorized-request checks passed; authenticated save/AI checks require the office code and remain unverified. The public UI reports connection failures and saves locally; it never claims a successful cloud save without a server response. The office access code is kept only in memory. No API keys or customer data are included in public assets. Drive saves versioned JSON and Excel copies in a separate Purohit Portfolio Plans folder. The AI assistant is read-only, uses optional anonymous portfolio context, does not have live market retrieval, and falls back from Gemini to Groq on service failures.
 
 ### Checks
 
