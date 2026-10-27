@@ -22,3 +22,46 @@
 .portfolio-desk .allocation-card header{min-height:0}
 .portfolio-desk .desk-topbar button{min-height:36px}
 @media print{.portfolio-desk,.portfolio-desk *{visibility:visible!important}.portfolio-desk{height:auto!important}.portfolio-desk .desk-main{height:auto!important}.portfolio-desk .holdings-table input,.portfolio-desk .holdings-table select{margin:0;min-width:0;width:100%}.portfolio-desk .workspace-heading:after{content:'Proposed instructions — not an execution confirmation';display:block;font:10px sans-serif;color:#667}}
+/* Table-first layout: surrounding controls have a fixed, compact footprint. */
+@media screen{
+.portfolio-desk .desk-main{gap:8px;padding:0 16px 5px}
+.portfolio-desk .desk-topbar{min-height:48px;gap:10px}
+.portfolio-desk .desk-topbar button{min-height:32px;padding:6px 10px}
+.portfolio-desk .workspace-heading{min-height:30px;gap:12px}
+.portfolio-desk .workspace-heading>div{display:flex;align-items:baseline;gap:16px;min-width:0}
+.portfolio-desk .workspace-heading .eyebrow{display:none}
+.portfolio-desk .workspace-heading h1{font-size:23px;margin:0;white-space:nowrap}
+.portfolio-desk .workspace-heading p{font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.portfolio-desk .workspace-heading p span{display:none}
+.portfolio-desk .workspace-heading .icon-button{padding:4px 7px}
+.portfolio-desk .allocation-card{padding:7px 12px}
+.portfolio-desk .allocation-card header{margin-bottom:4px;gap:14px}
+.portfolio-desk .allocation-card h2{font-size:15px}
+.portfolio-desk .segmented button{padding:3px 10px}
+.portfolio-desk .allocation-line{margin-top:4px;gap:12px}
+.portfolio-desk .allocation-track{height:19px}
+.portfolio-desk .allocation-line>div:first-child{width:140px}
+.portfolio-desk .allocation-legend{margin-top:5px;max-height:16px;padding-left:152px;flex-wrap:nowrap;white-space:nowrap}
+.portfolio-desk .holdings-card>header{padding:8px 12px;min-height:43px}
+.portfolio-desk .holdings-card h2{font-size:17px}
+.table-toolbar{display:flex;gap:8px;align-items:center}
+.portfolio-desk .table-toolbar button{padding:6px 10px;font-size:11px}
+.portfolio-desk .holdings-table th{padding:7px 9px;font-size:11px}
+.portfolio-desk .holdings-table td{padding:6px 9px;line-height:1.35}
+.portfolio-desk .holdings-table td strong{font-size:12px;line-height:1.35}
+.portfolio-desk .holdings-table td small{margin-top:2px;font-size:9px}
+.portfolio-desk .holdings-table input,.portfolio-desk .holdings-table select{padding:5px;font-size:12px}
+.portfolio-desk .holdings-card footer{padding:4px 12px;min-height:28px}
+.portfolio-desk .ai-bar{display:none}
+.portfolio-desk .desk-bottom{padding:7px 12px;gap:12px;min-height:48px}
+.portfolio-desk .desk-bottom strong{font-size:17px}
+.portfolio-desk .bottom-buttons button{padding:7px 9px}
+.portfolio-desk .desk-status{font-size:9px;line-height:12px}
+.portfolio-desk.table-focus .allocation-card,.portfolio-desk.table-focus .workspace-heading{display:none}
+.portfolio-desk .inline-scheme-picker{top:46px;max-height:calc(100% - 55px)}
+.portfolio-desk .allocation-track>div{cursor:help}
+}
+.allocation-tooltip{position:fixed;transform:translateX(-50%);z-index:1200;pointer-events:none;background:#153747;color:#fff;border:1px solid #3b6275;padding:10px 14px;border-radius:7px;box-shadow:0 5px 20px #15374733;font:12px/1.5 'Segoe UI',sans-serif;max-width:min(340px,94vw);text-align:center}
+@media(max-width:1000px){.portfolio-desk .workspace-heading p{display:none}.portfolio-desk .allocation-card header small{display:none}.portfolio-desk .desk-bottom .drive-status{display:none}.portfolio-desk .desk-sidebar{padding-top:8px}.portfolio-desk .desk-brand{height:105px;margin-bottom:10px}.portfolio-desk .holdings-card h2{font-size:15px}}
+@media(max-width:600px){.portfolio-desk .desk-main{padding:0 7px 4px;gap:6px}.portfolio-desk .workspace-heading h1{font-size:18px}.portfolio-desk .desk-topbar{min-height:70px}.portfolio-desk .allocation-legend{display:none}.portfolio-desk .allocation-line>div:first-child{width:105px}.portfolio-desk .holdings-card h2{font-size:13px}.portfolio-desk .table-toolbar{gap:4px}.portfolio-desk .table-toolbar button{font-size:10px;padding:5px}.portfolio-desk .table-toolbar kbd{display:none}.portfolio-desk .desk-bottom{padding:5px 8px}.portfolio-desk .bottom-buttons{flex-wrap:wrap}.portfolio-desk .desk-status{font-size:8px}}
+@media print{.allocation-tooltip,.table-toolbar{display:none!important}}
