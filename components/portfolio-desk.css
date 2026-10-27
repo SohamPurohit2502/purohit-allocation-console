@@ -21,3 +21,4 @@
 .portfolio-desk .ai-bar{min-height:39px}
 .portfolio-desk .allocation-card header{min-height:0}
 .portfolio-desk .desk-topbar button{min-height:36px}
+@media print{.portfolio-desk,.portfolio-desk *{visibility:visible!important}.portfolio-desk{height:auto!important}.portfolio-desk .desk-main{height:auto!important}.portfolio-desk .holdings-table input,.portfolio-desk .holdings-table select{margin:0;min-width:0;width:100%}.portfolio-desk .workspace-heading:after{content:'Proposed instructions — not an execution confirmation';display:block;font:10px sans-serif;color:#667}}
