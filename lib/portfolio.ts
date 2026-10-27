@@ -4,7 +4,7 @@ export type Portfolio={id:string;clientId:string;clientName:string;source:string
 export type PdfItem={text:string;x:number;y:number;width:number};
 export type PdfPage={width:number;height:number;items:PdfItem[]};
 export const amcKey=(s:string)=>s.toLowerCase().replace(/\bpru\b/g,'prudential').replace(/franklin (india|templeton)/g,'franklin').replace(/\b(mutual|fund|asset|management|company|limited|ltd)\b/g,'').replace(/[^a-z0-9]/g,'');
-const nameKey=(s:string)=>s.toLowerCase().replace(/\bpru\b/g,'prudential').replace(/\b(reg(ular)?|plan|fund|growth|gr|std|standard)\b/g,'').replace(/\(g\)/g,'').replace(/&/g,'and').replace(/[^a-z0-9]/g,'');
+export const nameKey=(s:string)=>s.toLowerCase().replace(/\bpru\b/g,'prudential').replace(/\b(reg(ular)?|plan|fund|growth|gr|std|standard)\b/g,'').replace(/\(g\)/g,'').replace(/&/g,'and').replace(/[^a-z0-9]/g,'');
 export function matchScheme(name:string,schemes:Scheme[]){const key=nameKey(name);const found=schemes.filter(s=>nameKey(s.name)===key||nameKey(s.official)===key);return found.length===1?found[0]:undefined}
 export function inferAMC(name:string,schemes:Scheme[]){const n=name.toLowerCase().replace(/\bpru\b/g,'prudential');const amcs=[...new Set(schemes.map(s=>s.amc))].sort((a,b)=>b.length-a.length);return amcs.find(a=>n.startsWith(a.toLowerCase().replace(/ mutual fund$/,'')))||(n.startsWith('franklin')?amcs.find(a=>a.toLowerCase().startsWith('franklin')):'')||''}
 const num=(s:string)=>Number(s.replace(/,/g,''));

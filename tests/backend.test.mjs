@@ -1,0 +1,17 @@
+import {registerHooks} from 'node:module';
+import {test} from 'node:test';import assert from 'node:assert/strict';
+const stub=`export const M=(a,b)=>a===b;export const V=get=>({key:'test',clientId:'test',clientSecret:'test'});export const j=JSON.parse;export const Q=async()=>({access_token:'test-token'});`;
+registerHooks({resolve(s,c,next){if(s==='./legacy-worker.mjs'&&c.parentURL?.includes('/backend/'))return {url:'data:text/javascript,'+encodeURIComponent(stub),shortCircuit:true};return next(s,c)}});
+const {answerQuestion,portfolioAPI}=await import('../backend/portfolio-api.mjs');
+const req=(origin,code,body={action:'status'},method='POST')=>new Request('https://purohit-datasheets.pages.dev/.netlify/functions/portfolio',{method,headers:{Origin:origin,'x-staff-code':code,'Content-Type':'application/json'},...(method==='POST'?{body:JSON.stringify(body)}:{})});
+const origin='https://sohampurohit2502.github.io';const env={STAFF_ACCESS_CODE:'test-code'};
+test('unapproved origins rejected',async()=>assert.equal((await portfolioAPI(req('https://evil.example','test-code'),env)).status,403));
+test('preflight allows exact origin with staff header',async()=>{const r=await portfolioAPI(req(origin,'',{},'OPTIONS'),env);assert.equal(r.status,204);assert.equal(r.headers.get('Access-Control-Allow-Origin'),origin)});
+test('missing or wrong office code denied',async()=>assert.equal((await portfolioAPI(req(origin,'wrong'),env)).status,401));
+test('missing Drive connection reported, not fake success',async()=>assert.equal((await portfolioAPI(req(origin,'test-code'),env)).status,503));
+test('Drive owner must match requested account',async()=>{const e={...env,OFFICE_CONFIG:{get:async()=>JSON.stringify({owner:'someone@example.com'})}};assert.equal((await portfolioAPI(req(origin,'test-code'),e)).status,403)});
+test('Drive status uses existing owner connection',async()=>{const e={...env,OFFICE_CONFIG:{get:async()=>JSON.stringify({owner:'support@purohitassociates.org'})}};const r=await portfolioAPI(req(origin,'test-code'),e);assert.equal(r.status,200);assert.equal((await r.json()).connected,true)});
+test('Gemini failure automatically uses Groq',async()=>{const calls=[];const mock=async(url)=>{calls.push(url);return calls.length===1?new Response('',{status:503}):Response.json({choices:[{message:{content:'Test answer'},finish_reason:'stop'}]})};const r=await answerQuestion({question:'Explain SIP'},{GEMINI_API_KEY:'test',GROQ_API_KEY:'test'},mock);assert.equal(r.provider,'Groq');assert.equal(calls.length,2)});
+test('Gemini success avoids a second provider call',async()=>{let calls=0;const r=await answerQuestion({question:'Explain SIP'},{GEMINI_API_KEY:'test'},async()=>{calls++;return Response.json({candidates:[{finishReason:'STOP',content:{parts:[{text:'Answer'}]}}]})});assert.equal(r.provider,'Gemini');assert.equal(calls,1)});
+test('content refusals do not fall through to another provider',async()=>{let calls=0;await assert.rejects(()=>answerQuestion({question:'Question'},{GEMINI_API_KEY:'test',GROQ_API_KEY:'test'},async()=>{calls++;return Response.json({promptFeedback:{blockReason:'SAFETY'}})}),/content rules/);assert.equal(calls,1)});
+test('both providers failing gives explicit error',async()=>assert.rejects(()=>answerQuestion({question:'Question'},{GEMINI_API_KEY:'test',GROQ_API_KEY:'test'},async()=>new Response('',{status:429})),/Both AI/));

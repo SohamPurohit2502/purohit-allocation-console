@@ -1,4 +1,5 @@
 import { savePortfolio } from './portfolio-store';
+import { validatePlan } from './workspace';
 import { updateMaster } from './master-data';
 import uploaded from './uploaded-schemes.json';
 import {
@@ -66,6 +67,36 @@ export async function localData(payload?: any): Promise<any> {
         if (payload) {
           const p = payload;
           switch (p.action) {
+            case 'deskPlan':
+              validatePlan(p.plan);
+              if (!d.clients.some((c: any) => c.id === p.plan.client.id)) throw Error('Client no longer exists.');
+              for(const row of p.plan.rows.filter((r: any)=>r.action!=='none')){
+                if(!d.schemes.some((s: any)=>s.id===row.scheme?.id&&s.active))throw Error('A planned scheme is no longer active in the master. Select it again.');
+                if(row.action==='switch'&&!d.schemes.some((s: any)=>s.id===row.target?.id&&s.active))throw Error('The switch destination is no longer active.');
+              }
+              if ((d.deskPlans || []).some((x: any) => x.id === p.plan.id && x.status === 'final')) throw Error('Final plans are immutable. Save a new plan.');
+              d.deskPlans = [structuredClone(p.plan), ...(d.deskPlans || []).filter((x: any) => x.id !== p.plan.id)];
+              output = p.plan;
+              break;
+            case 'deskDriveStatus': {
+              const plan = (d.deskPlans || []).find((x: any) => x.id === p.id);
+              if (!plan) throw Error('Plan not found.');
+              plan.drive = p.drive || ''; plan.driveError = p.error || '';
+              break;
+            }
+            case 'folioMaster': {
+              if (!p.portfolios?.length || !p.clients?.length) throw Error('Empty folio master.');
+              const clients = new Map(d.clients.map((c: any) => [c.id,c]));
+              p.clients.forEach((c: any) => clients.set(c.id,c));
+              d.clients = [...clients.values()];
+              // Replace the current snapshot atomically, preserving immutable saved plans.
+              d.portfolios = structuredClone(p.portfolios);
+              d.folioImport = { date: new Date().toISOString(), name: p.name, count: p.count };
+              break;
+            }
+            case 'sectorWeights':
+              d.sectorWeights = structuredClone(p.rows);
+              break;
             case 'portfolio':
               output = savePortfolio(d, p.portfolio);
               break;
