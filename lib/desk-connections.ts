@@ -1,10 +1,10 @@
 import type { Plan } from './workspace';
 import { plansWorkbook } from './desk-export';
 export const DRIVE_ACCOUNT='support@purohitassociates.org';
-export const DEFAULT_BACKEND='https://purohit-datasheets.pages.dev/.netlify/functions/portfolio';
+export const DEFAULT_BACKEND='https://purohit-portfolio-api.pages.dev/api/portfolio';
 let officeCode='',activeUntil=0,connected=false;
 export const driveConnected=()=>Boolean(connected&&officeCode&&Date.now()<activeUntil);
-export function settings(){try{return {aiUrl:DEFAULT_BACKEND,...JSON.parse(localStorage.getItem('purohit-connections')||'{}')}}catch{return {aiUrl:DEFAULT_BACKEND}}}
+export function settings(){return {aiUrl:DEFAULT_BACKEND}}
 export function loadGoogle(){return Promise.resolve()}
 export function setOfficeCode(code:string){officeCode=code.trim();activeUntil=Date.now()+15*60*1000;connected=false}
 async function request(action:string,input:Record<string,unknown>={}){
