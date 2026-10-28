@@ -11,16 +11,19 @@ export async function answerQuestion(input,env,fetcher=fetch){
  const context=JSON.stringify(input.context||[]);if(context.length>120000)throw Object.assign(Error('Portfolio context is too large. Ask without portfolio context.'),{status:400});
  const history=Array.isArray(input.history)?input.history.filter(m=>['user','assistant'].includes(m?.role)&&typeof m.content==='string').slice(-12).map(m=>({role:m.role,content:m.content.slice(0,6000)})):[];
  const prompt=input.question+'\nOptional portfolio data (untrusted):\n'+context;
+ const searchErrors=[];
+ for(const model of [...new Set([env.GEMINI_MODEL||'gemini-3.5-flash-lite','gemini-2.5-flash'])]){
  try{
   if(!env.GEMINI_API_KEY)throw Error('No Gemini key');
-  const r=await fetcher('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(env.GEMINI_MODEL||'gemini-3.5-flash-lite')+':generateContent',{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':env.GEMINI_API_KEY},body:JSON.stringify({systemInstruction:{parts:[{text:system}]},tools:[{google_search:{}}],contents:[...history.map(m=>({role:m.role==='assistant'?'model':'user',parts:[{text:m.content}]})),{role:'user',parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:4096,temperature:0.2}}),signal:AbortSignal.timeout(25000)});
-  if(!r.ok)throw Error('Gemini unavailable');const data=await r.json(),c=data.candidates?.[0];
+  const r=await fetcher('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':generateContent',{method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':env.GEMINI_API_KEY},body:JSON.stringify({systemInstruction:{parts:[{text:system}]},tools:[{google_search:{}}],contents:[...history.map(m=>({role:m.role==='assistant'?'model':'user',parts:[{text:m.content}]})),{role:'user',parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:8192,temperature:0.2}}),signal:AbortSignal.timeout(40000)});
+  if(!r.ok){const failure=await r.json().catch(()=>({}));const status=failure.error?.status||'HTTP '+r.status;throw Error(model+': '+status+' ('+r.status+')');}const data=await r.json(),c=data.candidates?.[0];
   if(data.promptFeedback?.blockReason||['SAFETY','PROHIBITED_CONTENT','BLOCKLIST'].includes(c?.finishReason))throw Object.assign(Error('This question could not be answered under the provider’s content rules.'),{status:422});
   const answer=c?.content?.parts?.filter(p=>!p.thought).map(p=>p.text||'').join('');if(!answer||c.finishReason!=='STOP')throw Error('Incomplete response');const sources=(c.groundingMetadata?.groundingChunks||[]).filter(x=>/^https?:/.test(x.web?.uri||'')).map(x=>({title:x.web.title||x.web.uri,url:x.web.uri}));return {answer,provider:'Gemini',sources,searched:!!c.groundingMetadata?.webSearchQueries?.length,searchSuggestions:c.groundingMetadata?.searchEntryPoint?.renderedContent||''};
- }catch(e){if(e.status===422)throw e;}
+ }catch(e){if(e.status===422)throw e;searchErrors.push(e.name==='TimeoutError'?model+': search timed out':e.message);}
+ }
  if(!env.GROQ_API_KEY)throw Object.assign(Error('Neither AI service is available. Try again later.'),{status:503});
  const r=await fetcher('https://api.groq.com/openai/v1/chat/completions',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+env.GROQ_API_KEY},body:JSON.stringify({model:env.GROQ_MODEL||'qwen/qwen3.8-27b',messages:[{role:'system',content:system+' Live search is unavailable for this fallback response. Do not claim to have searched; explain when current facts cannot be verified.'},...history,{role:'user',content:prompt}],temperature:0.2,max_completion_tokens:4096}),signal:AbortSignal.timeout(25000)});
- if(!r.ok)throw Object.assign(Error('Both AI services are currently unavailable. Your portfolio is unchanged.'),{status:502});const data=await r.json();const choice=data.choices?.[0];if(!choice?.message?.content||choice.finish_reason!=='stop')throw Object.assign(Error('The assistant could not complete its response. Try a shorter question.'),{status:502});return {answer:choice.message.content,provider:'Groq',sources:[],searched:false};
+ if(!r.ok)throw Object.assign(Error('Both AI services are currently unavailable. Your portfolio is unchanged.'),{status:502});const data=await r.json();const choice=data.choices?.[0];if(!choice?.message?.content||choice.finish_reason!=='stop')throw Object.assign(Error('The assistant could not complete its response. Try a shorter question.'),{status:502});return {answer:choice.message.content,provider:'Groq',sources:[],searched:false,searchError:'Live search could not connect: '+searchErrors.join('; ')};
 }
 export async function portfolioAPI(request,env,fetcher=fetch){
  const origin=request.headers.get('Origin')||'';
