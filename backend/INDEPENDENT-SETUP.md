@@ -10,13 +10,13 @@ Activation requires secrets configured on this project only:
 - STAFF_ACCESS_CODE: a new portfolio-specific access code.
 - AI provider credentials: pending owner selection. Currently supported GEMINI_API_KEY / GEMINI_MODEL and GROQ_API_KEY / GROQ_MODEL. Claude requires an adapter before activation.
 - GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET: a dedicated Google OAuth client.
-- GOOGLE_REFRESH_TOKEN: obtained through consent from support@purohitassociates.org for the dedicated OAuth client. Never copy the datasheet refresh token.
+- PORTFOLIO_STORE and DRIVE_TOKEN_KEY: independent KV namespace and encryption key for the refresh token obtained through the dedicated Google consent flow. Never copy the datasheet refresh token.
 
 Keep all secrets in Cloudflare; never put them in this repository or the public website. Redeploy after configuration changes. Without setup the service returns 503 and local drafts/exports remain usable.
 
 Existing Drive files are not deleted. With a new OAuth client, drive.file access does not automatically include files created by the old app: re-authorize access to the existing portfolio folder or import the user's local saved plans and sync them through the new connection. Do not silently broaden Drive permissions.
 
-Validation: tests/backend.test.mjs checks independent authentication and verifies the Google account against Drive's about endpoint before reading or writing plans. No production provider key or Drive consent is configured yet.
+Validation: tests/backend.test.mjs checks independent authentication and verifies the Google account against Drive's about endpoint before reading or writing plans. Dedicated Drive consent is configured and verified for support@purohitassociates.org. AI provider keys remain unconfigured.
 
 ## Selected AI connection
 Gemini with Google Search is tried first. Groq receives Tavily search results if Gemini fails. Sources are returned to the chat. No built-in Groq Compound models are used (retired). Gemini's previously failing 2.5 fallback is removed; GEMINI_FALLBACK_MODEL is optional and must be a model enabled on this project's key.
@@ -44,3 +44,5 @@ All console files are scoped to a new `Purohit Allocation Console` folder, appPr
 Google app is currently in Testing; Google may expire its refresh token after seven days. Production publishing/branding must be completed for durable office use. The UI provides Connect Google Drive and Check connection, plus explicit full-workspace backup/restore controls. Automatic backups run five seconds after saved data changes while connected; failed/offline backup remains explicitly pending.
 
 When updating Cloudflare Pages secrets, do not submit redacted empty values returned by GET as replacements. Use the secret-specific management command or intentionally supply only the targeted settings with documented preservation semantics. Never regenerate DRIVE_TOKEN_KEY when encrypted records exist.
+
+Production verification on 14 November 2026: independent Google refresh/owner check returned HTTP 200; authenticated diagnostic created, read back, and trashed its own temporary file in folder 1KtJGfEOLqrffIHa8XFXCAmh6wyl3oQ2K. Full-workspace uploads use browser gzip compression, server-side opaque versioned storage, and bounded client-side decompression during restore. The initial uncompressed full backup timed out; compressed production verification remains pending.
