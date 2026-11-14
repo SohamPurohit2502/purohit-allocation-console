@@ -15,7 +15,7 @@ async function request(action:string,input:Record<string,unknown>={}){
  if(r.status===401){officeCode='';connected=false;throw Error('Office session expired or code incorrect. Reconnect in Data → Connections.')}
  if(!r.headers.get('content-type')?.includes('application/json'))throw Error('The portfolio backend is not deployed yet. Your local work remains available.');
  const data:any=await r.json();if(!r.ok)throw Error(data.error||'The office service is unavailable.');activeUntil=Date.now()+15*60*1000;return data;
- }catch(e){if(e instanceof TypeError)throw Error('Cannot reach the portfolio backend. Check its deployment and your connection.');throw e}finally{clearTimeout(timer)}
+ }catch(e){if(controller.signal.aborted)throw Error('The upload timed out. Your local data is safe; try Save all data again.');if(e instanceof TypeError)throw Error('Cannot reach the portfolio backend. Check its deployment and your connection.');throw e}finally{clearTimeout(timer)}
 }
 export async function connectDrive(){const status=await request('status');if(status.owner?.toLowerCase()!==DRIVE_ACCOUNT)throw Error('The office Drive must belong to '+DRIVE_ACCOUNT+'.');connected=true}
 export async function saveDrivePlan(plan:Plan){const bytes=plansWorkbook([plan]);let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));const result=await request('save',{plan,excel:btoa(binary)});return result.url as string}
@@ -25,6 +25,11 @@ export async function askAI(question:string,context:unknown,history:{role:string
 
 export async function authorizeDrive(){const result=await request('connect');return result.url as string}
 
-export async function backupWorkspace(data:unknown){return request('backup',{workspace:{version:1,data}})}
+export async function backupWorkspace(data:any){
+ const content=JSON.stringify({version:1,data});if(content.length>100000000)throw Error('Workspace exceeds the 100 MB backup limit.');
+ const compressed=new Uint8Array(await new Response(new Blob([content]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer());let binary='';for(let i=0;i<compressed.length;i+=8192)binary+=String.fromCharCode(...compressed.subarray(i,i+8192));
+ return request('backup',{archive:{version:1,encoding:'gzip',content:btoa(binary),clients:data.clients.length,holdings:(data.portfolios||[]).reduce((n:number,p:any)=>n+(p.holdings?.length||0),0)}});
+}
 export async function listWorkspaceBackups(){return (await request('backups')).backups as {id:string;name:string;date:string;clients:number;holdings:number}[]}
-export async function restoreWorkspaceBackup(id:string){return (await request('restore',{id})).workspace}
+export async function restoreWorkspaceBackup(id:string){const w=(await request('restore',{id})).workspace;if(w.encoding!=='gzip')return w;const bytes=Uint8Array.from(atob(w.content),c=>c.charCodeAt(0));const reader=new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip')).getReader();const chunks:Uint8Array[]=[];let size=0;try{for(;;){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>100000000)throw Error('Backup exceeds the 100 MB restore limit.');chunks.push(value)}}finally{await reader.cancel()}return JSON.parse(await new Blob(chunks as BlobPart[]).text())}
+

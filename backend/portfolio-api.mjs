@@ -50,7 +50,7 @@ export async function portfolioAPI(request,env,fetcher=fetch){
   const input=JSON.parse(raw);
   if(input.action==='ask')return json(await answerQuestion(input,env,fetcher));
   if(input.action==='connect')return json(await beginDriveAuth(env));
-  if(!['status','save','list','backup','backups','restore'].includes(input.action))return json({error:'Unknown action'},400);
+  if(!['status','save','list','backup','backups','restore','diagnose'].includes(input.action))return json({error:'Unknown action'},400);
   const refreshToken=await storedRefreshToken(env)||env.GOOGLE_REFRESH_TOKEN;
   if(!env.GOOGLE_CLIENT_ID||!env.GOOGLE_CLIENT_SECRET||!refreshToken)return json({error:'Connect Google Drive for this portfolio service. Its credentials are separate from other applications.'},503);
   const tr=await fetcher('https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({client_id:env.GOOGLE_CLIENT_ID,client_secret:env.GOOGLE_CLIENT_SECRET,refresh_token:refreshToken,grant_type:'refresh_token'}),signal:AbortSignal.timeout(15000)});
@@ -67,10 +67,19 @@ export async function portfolioAPI(request,env,fetcher=fetch){
   if(roots.length>1)throw Object.assign(Error('Multiple portfolio folders found. Resolve duplicates in Drive.'),{status:409});
   if(!roots.length&&input.action==='list')return json({plans:[]});
   const folder=roots[0]||await api(API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'Purohit Allocation Console',mimeType:'application/vnd.google-apps.folder',appProperties:{purohitRole:'allocation-console-root-v1'}})});
+  if(input.action==='diagnose'){
+   const marker=crypto.randomUUID();const file=await upload('Connection check - temporary.json',JSON.stringify({marker}),'application/json',{purohitRole:'allocation-diagnostic'});
+   try{const saved=await api(API+'/'+file.id+'?alt=media');if(saved.marker!==marker)throw Error('Drive verification mismatch.');return json({connected:true,owner,folder:'https://drive.google.com/drive/folders/'+folder.id,writeReadVerified:true});}
+   finally{await api(API+'/'+file.id,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({trashed:true})});}
+  }
   if(['backup','backups','restore'].includes(input.action)){
    const backups=await list("'"+folder.id+"' in parents and appProperties has { key='purohitRole' and value='allocation-workspace-v1' }");
    if(input.action==='backups')return json({backups:backups.sort((a,b)=>(b.appProperties.savedAt||'').localeCompare(a.appProperties.savedAt||'')).map(f=>({id:f.id,name:f.name,date:f.appProperties.savedAt,clients:Number(f.appProperties.clients),holdings:Number(f.appProperties.holdings)}))});
    if(input.action==='restore'){const file=backups.find(f=>f.id===input.id);if(!file)return json({error:'Backup not found in the console folder.'},404);return json({workspace:await api(API+'/'+file.id+'?alt=media')});}
+   if(input.archive){const a=input.archive;if(a.version!==1||a.encoding!=='gzip'||typeof a.content!=='string'||a.content.length>20000000||!/^H4sI[A-Za-z0-9+/]*={0,2}$/.test(a.content)||!Number.isInteger(a.clients)||a.clients<1||!Number.isInteger(a.holdings)||a.holdings<0)return json({error:'Invalid compressed backup.'},400);
+    const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(a.content)))).map(x=>x.toString(16).padStart(2,'0')).join('');const duplicate=backups.find(f=>f.appProperties.hash===hash);if(duplicate)return json({id:duplicate.id,date:duplicate.appProperties.savedAt});
+    const date=new Date().toISOString();const file=await upload('Workspace - '+date.replace(/[:.]/g,'-')+'.json',JSON.stringify(a),'application/json',{purohitRole:'allocation-workspace-v1',savedAt:date,hash,clients:String(a.clients),holdings:String(a.holdings)});return json({id:file.id,date});
+   }
    const w=input.workspace;if(w?.version!==1||!Array.isArray(w.data?.clients)||!Array.isArray(w.data?.schemes)||!w.data.clients.length||!w.data.schemes.length)return json({error:'Invalid workspace backup.'},400);
    const content=JSON.stringify(w);const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(content)))).map(x=>x.toString(16).padStart(2,'0')).join('');
    const duplicate=backups.find(f=>f.appProperties.hash===hash);if(duplicate)return json({id:duplicate.id,date:duplicate.appProperties.savedAt});
