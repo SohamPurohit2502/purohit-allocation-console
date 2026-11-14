@@ -22,3 +22,9 @@ export async function saveDrivePlan(plan:Plan){const bytes=plansWorkbook([plan])
 export async function loadDrivePlans():Promise<Plan[]>{const result=await request('list');return result.plans}
 export type AIReply={answer:string;provider:string;sources?:{title:string;url:string}[];searched?:boolean;searchSuggestions?:string;searchError?:string};
 export async function askAI(question:string,context:unknown,history:{role:string;content:string}[]=[]){return request('ask',{question,context,history}) as Promise<AIReply>}
+
+export async function authorizeDrive(){const result=await request('connect');return result.url as string}
+
+export async function backupWorkspace(data:unknown){return request('backup',{workspace:{version:1,data}})}
+export async function listWorkspaceBackups(){return (await request('backups')).backups as {id:string;name:string;date:string;clients:number;holdings:number}[]}
+export async function restoreWorkspaceBackup(id:string){return (await request('restore',{id})).workspace}

@@ -1,4 +1,5 @@
 // Standalone portfolio service. All credentials belong to this deployment.
+import {beginDriveAuth,storedRefreshToken} from './drive-auth.mjs';
 import {timingSafeEqual} from 'node:crypto';
 const equal=(a,b)=>{const x=new TextEncoder().encode(a),y=new TextEncoder().encode(b);return x.length===y.length&&timingSafeEqual(x,y)};
 const OWNER='support@purohitassociates.org';
@@ -45,12 +46,14 @@ export async function portfolioAPI(request,env,fetcher=fetch){
  if(env.API_LIMIT&&!(await env.API_LIMIT.limit({key:'portfolio:'+ (request.headers.get('CF-Connecting-IP')||'office')})).success)return json({error:'Too many requests. Please wait a minute.'},429);
  try{
   if(!request.headers.get('content-type')?.includes('application/json'))return json({error:'Expected JSON'},415);
-  const raw=await request.text();if(raw.length>6500000)return json({error:'Plan exceeds the upload limit.'},413);
+  const raw=await request.text();if(raw.length>50000000)return json({error:'Plan exceeds the upload limit.'},413);
   const input=JSON.parse(raw);
   if(input.action==='ask')return json(await answerQuestion(input,env,fetcher));
-  if(!['status','save','list'].includes(input.action))return json({error:'Unknown action'},400);
-  if(!env.GOOGLE_CLIENT_ID||!env.GOOGLE_CLIENT_SECRET||!env.GOOGLE_REFRESH_TOKEN)return json({error:'Connect Google Drive for this portfolio service. Its credentials are separate from other applications.'},503);
-  const tr=await fetcher('https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({client_id:env.GOOGLE_CLIENT_ID,client_secret:env.GOOGLE_CLIENT_SECRET,refresh_token:env.GOOGLE_REFRESH_TOKEN,grant_type:'refresh_token'}),signal:AbortSignal.timeout(15000)});
+  if(input.action==='connect')return json(await beginDriveAuth(env));
+  if(!['status','save','list','backup','backups','restore'].includes(input.action))return json({error:'Unknown action'},400);
+  const refreshToken=await storedRefreshToken(env)||env.GOOGLE_REFRESH_TOKEN;
+  if(!env.GOOGLE_CLIENT_ID||!env.GOOGLE_CLIENT_SECRET||!refreshToken)return json({error:'Connect Google Drive for this portfolio service. Its credentials are separate from other applications.'},503);
+  const tr=await fetcher('https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({client_id:env.GOOGLE_CLIENT_ID,client_secret:env.GOOGLE_CLIENT_SECRET,refresh_token:refreshToken,grant_type:'refresh_token'}),signal:AbortSignal.timeout(15000)});
   if(!tr.ok)return json({error:'Reconnect the portfolio Google Drive account.'},502);
   const token=await tr.json();
   const identity=await fetcher('https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)',{headers:{Authorization:'Bearer '+token.access_token}});
@@ -60,10 +63,20 @@ export async function portfolioAPI(request,env,fetcher=fetch){
   if(input.action==='status')return json({connected:true,owner});
   async function api(url,options={}){const r=await fetcher(url,{...options,headers:{Authorization:'Bearer '+token.access_token,...options.headers}});if(!r.ok)throw Object.assign(Error('Drive request failed. Your local plan is safe.'),{status:502});return r.json()}
   async function list(q){let pageToken='',files=[];do{const p=new URLSearchParams({q:q+' and trashed=false',fields:'nextPageToken,files(id,name,appProperties)',pageSize:'100',...(pageToken?{pageToken}:{})});const d=await api(API+'?'+p);files.push(...d.files);pageToken=d.nextPageToken||'';}while(pageToken);return files}
-  const roots=await list("mimeType='application/vnd.google-apps.folder' and appProperties has { key='purohitRole' and value='allocation-root-v2' }");
+  const roots=await list("mimeType='application/vnd.google-apps.folder' and appProperties has { key='purohitRole' and value='allocation-console-root-v1' }");
   if(roots.length>1)throw Object.assign(Error('Multiple portfolio folders found. Resolve duplicates in Drive.'),{status:409});
   if(!roots.length&&input.action==='list')return json({plans:[]});
-  const folder=roots[0]||await api(API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'Purohit Portfolio Plans',mimeType:'application/vnd.google-apps.folder',appProperties:{purohitRole:'allocation-root-v2'}})});
+  const folder=roots[0]||await api(API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'Purohit Allocation Console',mimeType:'application/vnd.google-apps.folder',appProperties:{purohitRole:'allocation-console-root-v1'}})});
+  if(['backup','backups','restore'].includes(input.action)){
+   const backups=await list("'"+folder.id+"' in parents and appProperties has { key='purohitRole' and value='allocation-workspace-v1' }");
+   if(input.action==='backups')return json({backups:backups.sort((a,b)=>(b.appProperties.savedAt||'').localeCompare(a.appProperties.savedAt||'')).map(f=>({id:f.id,name:f.name,date:f.appProperties.savedAt,clients:Number(f.appProperties.clients),holdings:Number(f.appProperties.holdings)}))});
+   if(input.action==='restore'){const file=backups.find(f=>f.id===input.id);if(!file)return json({error:'Backup not found in the console folder.'},404);return json({workspace:await api(API+'/'+file.id+'?alt=media')});}
+   const w=input.workspace;if(w?.version!==1||!Array.isArray(w.data?.clients)||!Array.isArray(w.data?.schemes)||!w.data.clients.length||!w.data.schemes.length)return json({error:'Invalid workspace backup.'},400);
+   const content=JSON.stringify(w);const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(content)))).map(x=>x.toString(16).padStart(2,'0')).join('');
+   const duplicate=backups.find(f=>f.appProperties.hash===hash);if(duplicate)return json({id:duplicate.id,date:duplicate.appProperties.savedAt});
+   const date=new Date().toISOString(),holdings=(w.data.portfolios||[]).reduce((n,p)=>n+(p.holdings?.length||0),0);
+   const file=await upload('Workspace - '+date.replace(/[:.]/g,'-')+'.json',content,'application/json',{purohitRole:'allocation-workspace-v1',savedAt:date,hash,clients:String(w.data.clients.length),holdings:String(holdings)});return json({id:file.id,date});
+  }
   const files=await list(`'${folder.id}' in parents and appProperties has { key='purohitRole' and value='${ROLE}' }`);
   if(input.action==='list'){
    const latest=new Map();for(const f of files){const p=f.appProperties;if(!latest.has(p.planId)||latest.get(p.planId).appProperties.savedAt<p.savedAt)latest.set(p.planId,f)}

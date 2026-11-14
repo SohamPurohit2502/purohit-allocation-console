@@ -67,6 +67,11 @@ export async function localData(payload?: any): Promise<any> {
         if (payload) {
           const p = payload;
           switch (p.action) {
+            case 'restoreWorkspace': {
+              const w=p.workspace;if(w?.version!==1||!Array.isArray(w.data?.clients)||!Array.isArray(w.data?.schemes)||!w.data.clients.length||!w.data.schemes.length)throw Error('Invalid workspace backup.');
+              store.put(structuredClone(d),'before-drive-restore-'+Date.now());
+              for(const name of Object.keys(d))delete d[name];Object.assign(d,structuredClone(w.data));output={ok:true};break;
+            }
             case 'deskPlan':
               validatePlan(p.plan);
               if (!d.clients.some((c: any) => c.id === p.plan.client.id)) throw Error('Client no longer exists.');
@@ -249,6 +254,7 @@ export async function localData(payload?: any): Promise<any> {
     };
     tx.oncomplete = () => {
       db.close();
+      if(payload)window.dispatchEvent(new Event('portfolio-data-saved'));
       resolve(output);
     };
     tx.onabort = () => {
